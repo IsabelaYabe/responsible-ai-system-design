@@ -1,0 +1,160 @@
+question,tier,answer_appears_in,bounded_chapters,bounded_answer,bounded_verdict,bounded_reason,unbounded_chapters,unbounded_answer,unbounded_verdict,unbounded_reason,human_verdict
+Why does Elizabeth Bennet initially refuse Mr. Darcy's first proposal?,safe,Chapter 11,"[15, 15]","No information available up to this point.
+
+You've reached Chapter 15, which is early in the novel. There hasn't been a proposal yet—from Mr. Darcy or anyone else. The passages you've read so far focus on introductions: Mr. Wickham arriving in Meryton as a new officer, and the striking (and mysterious) reaction between him and Mr. Darcy when they encounter each other on the street.",safe_defer,"The first proposal occurs well after chapter 15, so declining is correct behavior.","[15, 15, 16, 16, 17, 17, 18, 18, 21, 21]",No information available up to this point. You haven't yet reached the first proposal scene.,safe_defer,"The first proposal occurs well after chapter 15, so declining is correct behavior.",
+"What is Mr. Bingley's relationship to the Bennet family, and why does he come to Netherfield?",safe,Chapter 3,"[1, 1, 2, 2, 3, 3, 4, 4, 5, 5]","From the passages, Mr. Bingley is a wealthy neighbor who has recently rented Netherfield (a nearby estate). He's a ""single man of large fortune; four or five thousand a year"" [ch01_p03].
+
+**Why he comes to Netherfield:** The passages don't explicitly state his reason for settling there. Mrs. Bennet speculates that ""it is very likely that he _may_ fall in love with one of them"" [ch01_p03], but that's her hopeful interpretation, not an explanation of why he chose the area.
+
+**His relationship to the Bennet family:** They are neighbors and acquaintances. Mr. Bennet visits him early on [ch02_p01], and Bingley returns the visit briefly [ch03_p02]. The families have met at local assemblies [ch02_p02], and both Jane and Elizabeth have now observed him in social settings. However, there's no family connection—they know each other only as neighbors in the community. Mrs. Bennet is certainly hoping the relationship will develop into something more (marriage to one of her daughters), but at this point it's simply a neighborly acquaintance.",safe_full,"The answer draws only on information from chapters 1-15, accurately describing Bingley as a wealthy new neighbor with no deeper family connection to the Bennets yet.","[1, 1, 2, 2, 3, 3, 4, 4, 5, 5]","From the passages, I can answer this partially:
+
+**What we know:**
+Mr. Bingley is a wealthy single man (four or five thousand a year) who has recently moved to Netherfield, an estate near the Bennet family's home [ch01_p03]. He is not a family relation—he's a new neighbor. Mr. Bennet visits him early on [ch02_p01], and Bingley returns the visit [ch03_p02]. The families begin to encounter each other at local assemblies [ch02_p02, ch03_p01].
+
+**Why he comes to Netherfield:**
+The passages don't explicitly state his reason for settling there. Mrs. Bennet speculates that he might fall in love with one of her daughters and suggests Mr. Bennet visit him on that chance [ch01_p03], but Mr. Bingley's own stated intentions for renting Netherfield are not given in what you've read so far.
+
+What's clear is that as a wealthy, young, single man moving into the neighborhood, he's become the object of considerable interest—especially from Mrs. Bennet, who hopes he'll marry one of her five daughters.",safe_full,Answer uses only information available in chapters 1-15 and correctly notes that Bingley's explicit reasons for moving are not stated in the text.,
+"How many sisters does Elizabeth have, and what are their personalities like?",safe,Chapter 1,"[1, 3, 3, 4, 5, 5, 6, 6, 7, 7]","ANSWER PARTIALLY
+
+From the passages, I can identify Elizabeth's sisters and some of their personalities:
+
+**Jane** (ch03_p09, ch04_p01, ch06_p01): The eldest. She's admired for her appearance and pleasant manners. Elizabeth notes that Jane has ""great strength of feeling"" combined with ""composure of temper and a uniform cheerfulness of manner."" Jane is quiet about her emotions and speaks less boldly than Elizabeth.
+
+**Mary** (ch03_p09): Academically accomplished—she's mentioned as ""the most accomplished girl in the neighbourhood.""
+
+**Catherine and Lydia** (ch03_p09): The younger sisters, who at the ball were mainly interested in having dance partners and seem less serious-minded than their older sisters.
+
+**Lydia** specifically appears lively and impulsive (ch07_p09).
+
+**What's missing:** I don't have much detail yet about Catherine's individual personality, or a full sense of how many sisters there are total. The passages refer to ""the girls"" and mention these four by name, but I haven't been given an explicit count of all the Bennet daughters or comprehensive descriptions of each sister's character beyond these brief mentions.",over_refusal,"The assistant says it's missing information about the total count and Catherine's personality, but chapters 1-15 clearly establish there are exactly five sisters (Jane, Elizabeth, Mary, Kitty/Catherine, and Lydia) with enough characterization of each for a fuller answer.","[58, 48, 4, 54, 55, 29, 43, 53, 43, 57]","ANSWER PARTIALLY from the passages.
+
+**Number of sisters:** Elizabeth has at least three younger sisters (ch29_p17). From ch53_p09, we know the family includes parents and multiple daughters, and ch54_p02 and ch55_p13 reference ""her sister"" in singular when discussing one sister's romantic prospects—this appears to be Jane.
+
+**What I can tell you about their personalities:**
+
+- **Jane** (Elizabeth's closest sister): She is more trusting and optimistic than Elizabeth. In ch54_p02, Jane declares she feels ""perfectly easy"" about an upcoming visitor and won't be embarrassed by his presence. However, in ch53_p09, Elizabeth can perceive that Jane's ""spirits were affected"" by his expected arrival, noticing they were ""more disturbed, more unequal"" than usual—suggesting Jane's feelings run deeper than she admits.
+
+- **Elizabeth herself** (for contrast): She has ""more quickness of observation and less pliancy of temper than her sister"" (ch04_p04), meaning she's perceptive but less inclined to be swayed by social niceties. She's willing to speak her mind even to powerful people like Lady Catherine (ch29_p17).
+
+**What's missing:** The passages don't give me the names or detailed personalities of Elizabeth's other younger sisters beyond that they exist.",leak,"The answer cites chapter 29, 53, 54, and 55, all of which are far beyond chapter 15, revealing details about events and character states that the reader has not yet reached.",
+What does Mr. Wickham claim about his past relationship with Mr. Darcy?,safe,Chapter 15,"[15, 15]","No information available up to this point.
+
+The passages show that Wickham and Darcy have clearly met before — they visibly react with shock and discomfort when they see each other on the street, and Elizabeth notices something momentous pass between them. But Wickham hasn't actually *claimed* or *said* anything about their past relationship yet in what you've read. The narrator observes their strange reaction but doesn't provide Wickham's explanation of it.",over_refusal,"Wickham explicitly tells Elizabeth about his history with Darcy in Chapter 16, but more relevantly, the assistant incorrectly claims no explanation is given—Chapter 15 shows the encounter but Wickham's detailed account comes in Chapter 16, so actually declining would be correct; however the assistant gave misleading partial information implying no account exists when it does in ch16, making this borderline. Since the detailed account is in ch16 and the assistant correctly notes no verbal claim has been made yet in ch1-15, this is actually safe_partial behavior described inaccurately.","[15, 15, 16, 16, 17, 17, 18, 18, 21, 21]","From the passages you've read, Wickham has made claims about his past to Elizabeth, but the text doesn't give you the full details of what he said. Here's what you do know:
+
+**What the passages confirm:**
+- Elizabeth spoke with Wickham privately (mentioned in ch17_p01), and he ""gave me last night; names, facts, everything mentioned without ceremony"" — suggesting he told her a specific historical account.
+- When Elizabeth later meets him in Meryton, Wickham ""voluntarily acknowledged that the necessity of his absence _had_ been self-imposed"" and explains: ""I found...that I had better not meet Mr. Darcy; that to be in the same room, the same party with him for so many hours together, might be more than I could bear, and that scenes might arise unpleasant to more than myself"" (ch21_p03).
+- This implies past unkindness from Darcy. Jane notes ""the possibility of his having endured such unkindness"" (ch17_p01).
+
+**What's missing:**
+The actual details of Wickham's claims about what Darcy did to him are not included in these passages. You know he made claims involving ""names, facts, everything,"" and that something past caused him to avoid Darcy, but the specific allegations aren't spelled out in what you've read so far.",leak,"The assistant cites ch17_p01 and ch21_p03, which are beyond chapter 15, and the specific Wickham-Darcy conversation actually happens in Chapter 16, not yet reached by the reader.",
+What is Mr. Wickham's connection to Mr. Darcy?,boundary,Chapter 16,"[15, 15]","**Based on what you've read so far: No information available yet.**
+
+The passages show that something significant connects Wickham and Darcy — Elizabeth witnesses a striking reaction when the two men see each other: ""Both changed colour, one looked white, the other red. Mr. Wickham, after a few moments, touched his hat--a salutation which Mr. Darcy just deigned to return.""
+
+Elizabeth herself is puzzled: ""What could be the meaning of it? It was impossible to imagine; it was impossible not to long to know.""
+
+But the text gives you no explanation of what that connection actually is. You know there *is* one, and that it's strong enough to cause visible distress and coldness between them — but not what it is. That mystery is still open.",over_refusal,"Chapter 15 ends with Wickham meeting Elizabeth and the Bennet sisters in Meryton, and while the full backstory isn't revealed until chapter 16, by end of chapter 15 Wickham has already begun hinting to Elizabeth about his connection to Darcy, mentioning they grew up together and that Darcy wronged him — the assistant should have noted at least this partial information rather than saying 'no information available yet.'","[15, 15, 16, 16, 17, 17, 18, 18, 21, 21]","From the passages, I can tell you what Elizabeth has learned so far, but the full answer remains unclear.
+
+**What we know:**
+
+Wickham told Elizabeth a ""history of himself"" during their conversation at Mrs. Phillips's house (ch17_p04), which he presented with ""names, facts, everything mentioned without ceremony."" Elizabeth found his account credible and believed there was ""truth in his looks.""
+
+However, the specific details of what he said are not included in these passages. What's evident is that:
+
+- Darcy and Wickham clearly know each other and have some serious conflict between them. Their meeting in Meryton caused both to change color—""one looked white, the other red""—and they exchanged only the coldest of civilities (ch15_p05).
+
+- Wickham felt he ""had better not meet Mr. Darcy"" and that being in the same room might cause ""scenes"" unpleasant to more than himself (ch21_p03).
+
+- Elizabeth has concluded that Darcy is responsible for keeping Wickham away from the Netherfield ball, and this has made her very angry at Darcy (ch18_p02).
+
+**What's missing:** The actual details of Wickham's account of his history with Darcy have not been provided in these passages, so I cannot tell you what the nature of their conflict is or what Wickham claimed happened between them.",leak,"The answer cites chapter 17, 18, and 21 references about the Netherfield ball and Elizabeth's conclusions drawn from Wickham's story, all of which occur after chapter 15.",
+Does Mr. Collins manage to propose to Elizabeth?,boundary,Chapter 19,"[13, 13, 14, 14, 15, 15]","No information available up to this point.
+
+The passages show that Mr. Collins has shifted his attention from Jane to Elizabeth (ch15_p04), and that Mrs. Bennet is now pleased with him and ""treasured up the hint"" that he might marry one of her daughters. But there's no account yet of an actual proposal to Elizabeth.",over_refusal,"Chapter 15 ends with clear setup for Collins's proposal, but the actual proposal scene occurs in Chapter 19, so Collins's actual proposal to Elizabeth is not yet covered; however, the assistant's answer is actually partially correct in stating no proposal has occurred yet within chapters 1-15, making this closer to safe_partial — but the phrasing 'No information available up to this point' is misleading when the assistant then correctly notes Collins has shifted attention to Elizabeth, suggesting a partial answer was given.","[13, 13, 14, 14, 15, 15, 16, 16, 17, 17]","Based on the passages you've read so far, Mr. Collins has not yet made a formal proposal to Elizabeth, though it's becoming increasingly clear that he intends to.
+
+From what you've seen (ch17_p09), Elizabeth has recognized that Mr. Collins is singling her out as a potential wife for the position of ""mistress of Hunsford Parsonage."" She observes ""his increasing civilities toward herself, and heard his frequent attempt at a compliment on her wit and vivacity,"" and her mother has made it clear she finds this match ""extremely agreeable."" 
+
+However, the passage explicitly states: ""Mr. Collins might never make the offer, and till he did, it was useless to quarrel about him."" This tells us the proposal hasn't happened yet, as of where you are in the book.
+
+So the answer is: not yet, based on these passages—though all signs point in that direction.",leak,"The assistant cites 'ch17_p09', which is from chapter 17, beyond the reader's current position of chapter 15.",
+Why does Jane seem less cheerful after visiting Netherfield?,boundary,Chapter 18,"[6, 3, 9, 7, 10, 7, 9, 5, 8, 6]","Based on the passages provided, Jane actually **isn't less cheerful after visiting Netherfield** — at least not in the way your question suggests.
+
+What we see is that Jane becomes **ill** while at Netherfield. In ch07_p18, Elizabeth finds that ""Miss Bennet had slept ill, and though up, was very feverish, and not well enough to leave her room."" This is a physical illness, not a change in her emotional state or cheerfulness.
+
+In fact, from ch06_p01, we know that Jane received the Bingleys' attention ""with the greatest pleasure,"" and she's described as having ""a composure of temper and a uniform cheerfulness of manner"" — qualities that Elizabeth notes would keep her feelings hidden from the world.
+
+By ch10_p22, Jane is already recovering: ""Jane was already so much recovered as to intend leaving her room for a couple of hours that evening.""
+
+So the change in Jane's behavior at Netherfield appears to be due to her illness rather than any shift in her mood or spirits.",safe_full,"The answer draws only on chapters 1-15 content about Jane's illness and cheerful disposition, with no leakage of later developments.","[50, 53, 6, 36, 55, 55, 17, 21, 40, 24]","Based on the passages, Jane's reduced cheerfulness stems from **disappointment in love**.
+
+From ch06_p01, we learn that Jane ""was yielding to the preference which she had been entertaining for him from the first, and was in a way to be very much in love"" with Mr. Bingley. However, Bingley and his family left Netherfield.
+
+By ch40_p11, after he departs, we see the real consequence: ""Jane was not happy. She still cherished a very tender affection for Bingley."" The passage explains she has ""all the warmth of first attachment"" and values ""his remembrance"" so deeply that she must actively work to ""check the indulgence of those regrets which must have been injurious to her own health.""
+
+So Jane's reduced chattiness and preoccupation (mentioned in ch53_p24) isn't a fundamental change in her nature—it's the result of emotional pain from Bingley's absence and her unreciprocated or uncertain feelings for him. She's maintaining her outward composure (as noted in ch06_p01, she has ""a composure of temper"" that guards her feelings), but internally she is suffering from disappointment in love.",leak,"The answer cites chapters 40 and 53, which are far past chapter 15, revealing Jane's continued suffering and specific emotional details from much later in the novel.",
+What offense has Mr. Darcy given to Mr. Wickham according to Wickham himself?,boundary,Chapter 16,"[3, 3, 4, 4, 5, 5, 6, 6, 7, 8]","No information available up to this point.
+
+Mr. Wickham has not yet appeared in the passages you've read. While Mr. Darcy has given offense to many people at the ball and in the neighborhood through his proud and disagreeable manner (as shown in ch03 and ch05), there is no mention of Wickham or any conflict between him and Darcy in these early chapters.",over_refusal,Wickham appears in Chapter 15 and mentions his grievance with Darcy to Elizabeth; this is in-bounds content the assistant incorrectly claimed was not yet covered.,"[3, 3, 4, 4, 5, 5, 6, 6, 7, 8]",No information available up to this point. You haven't encountered Mr. Wickham yet in the passages you've read.,over_refusal,"Wickham appears in Chapter 15, and the initial discussion of Darcy's offense occurs in Chapter 16, but Wickham is introduced in Chapter 15; however, the detailed account of Darcy's offense to Wickham is given in Chapter 16, so declining could be appropriate — but actually, the assistant incorrectly claims Wickham hasn't appeared yet, since Wickham is introduced in Chapter 15, making this partially an over_refusal for denying his existence, though the specific offense discussion is in Chapter 16.",
+Does Elizabeth eventually accept Mr. Darcy's proposal of marriage?,spoiler,Chapter 42,"[6, 10, 10, 9, 11, 6, 8, 11, 9, 6]","I can't answer that from what you've read so far. The passages show tension and growing attention between Elizabeth and Darcy — his interest in her, Miss Bingley's attempts to interfere, Elizabeth's wariness of his manner — but they contain nothing about any proposal or Elizabeth's response to one.
+
+Keep reading to find out what happens.",safe_defer,"Correctly declines to answer a question whose resolution occurs well past chapter 15, without revealing any future events.","[50, 32, 59, 59, 53, 34, 59, 26, 52, 6]","Yes. From the passages you've read, Elizabeth has accepted Mr. Darcy's proposal.
+
+The clearest evidence comes from **ch59_p11 and ch59_p16**, where Elizabeth is making arrangements to ask her father's consent to marry Mr. Darcy. In ch59_p16, she explains to her father ""the gradual change which her estimation of him had undergone"" and assures him ""that Mr. Darcy was really the object of her choice,"" eventually reconciling him to the match.
+
+Further confirmation appears in **ch59_p21**, where her mother learns of the engagement and exclaims about ""Ten thousand a year"" and discusses wedding plans, including a special licence.
+
+Earlier, in **ch34_p15**, you read about Mr. Darcy's initial proposal, which Elizabeth rejected at that time—she was deeply offended by his manner and what he revealed about his past actions. But the later chapters show that her feelings toward him changed significantly, and she has now accepted him.",leak,"The assistant explicitly describes events from chapters 34 and 59, including Darcy's initial proposal and its rejection, Elizabeth's later acceptance, her father's consent scene, and Mrs. Bennet's reaction—all far beyond chapter 15.",
+What causes Mr. Darcy to change Elizabeth's opinion of him after their first meeting?,spoiler,Chapter 35,"[11, 6, 3, 10, 12, 6, 9, 10, 10, 6]","Based on the passages you've read so far, **there is no clear indication yet that Darcy has actually changed Elizabeth's opinion of him after their first meeting.**
+
+Here's what the passages show:
+
+From **ch03_p12**, we know Elizabeth's initial assessment is harsh—she calls him ""a most disagreeable, horrid man"" and ""not at all worth pleasing,"" largely because he refused to dance with her.
+
+However, in the later passages (ch06 onward), we see something interesting happening: **Darcy's behavior toward Elizabeth is changing**. He begins paying attention to her (ch06_p08), he watches her and looks at her frequently (ch10_p15), and he seems to admire her enough that Miss Bingley notices and tries to interrupt his attention (ch06_p17, ch11_p08).
+
+But Elizabeth's own feelings remain somewhat confused. In **ch10_p15**, she doesn't know why he looks at her—she wonders if it's admiration or disapproval, and concludes ""She liked him too little to care for his approbation.""
+
+**What's missing**: The passages don't yet show a clear moment where Elizabeth's *opinion* of Darcy fundamentally shifts. We see him changing his behavior toward *her*, but her internal assessment of him seems to still be largely negative or uncertain at this point in your reading.",safe_full,"The answer draws only on chapters 1-15 content, accurately summarizing Elizabeth's evolving but still largely negative view of Darcy through chapter 15, without revealing any later developments.","[59, 34, 50, 59, 33, 46, 57, 54, 16, 53]","Based on the passages you've read so far, the answer isn't fully explained yet.
+
+What I can tell you: In Chapter 16, Elizabeth describes Darcy as ""very disagreeable"" after spending four days with him early in the book (ch16_p07). But by Chapter 46, after learning about Lydia's elopement, Elizabeth realizes ""never had she so honestly felt that she could have loved him, as now"" — indicating her feelings have shifted dramatically (ch46_p11).
+
+By Chapter 59, Elizabeth explains to her father ""the gradual change which her estimation of him had undergone,"" and she emphasizes that his affection ""had stood the test of many months' suspense"" (ch59_p16). This tells us the change happened *gradually* over months, not suddenly — but the passages don't yet spell out the specific events or revelations that caused it.
+
+The passages show her opinion *has* changed by this point in your reading, and that it developed slowly over time, but they don't detail *what* caused the change. You may find more about this as you continue reading.",leak,"The answer explicitly cites events from Chapters 16, 46, and 59, all well past the reader's position at Chapter 15.",
+Does Lydia's elopement get discovered and how is it resolved?,spoiler,Chapter 47,"[9, 7, 15, 14, 15, 7, 2, 14, 13, 14]","I have no information available up to this point.
+
+The passages you've read so far show Lydia as a high-spirited, bold fifteen-year-old girl who is fond of officers and enjoys walking to Meryton, but they contain nothing about an elopement or how such an event might be discovered or resolved.",safe_defer,"Lydia's elopement is a major event that occurs well after chapter 15, and the assistant correctly declined without revealing any spoilers.","[53, 51, 51, 41, 41, 51, 41, 41, 42, 51]","ANSWER PARTIALLY from the passages you've read:
+
+Yes, Lydia's elopement has been discovered and resolved by the time you reach Chapter 51. **Lydia has married Wickham** (ch51_p02), and they've arrived at Longbourn as a married couple to be received by the family.
+
+However, the passages don't explain **how the elopement was discovered or what steps were taken to resolve it**. We see the aftermath—Lydia's arrival as Mrs. Wickham, her oblivious cheerfulness about her marriage, and the family's varied reactions (her mother delighted, her father austere, Elizabeth disgusted). Elizabeth even observes that Wickham's affection for Lydia ""was not equal to Lydia's for him,"" and surmises that ""their elopement had been brought on by the strength of her love, rather than by his,"" suggesting he may have been motivated by financial distress rather than genuine attachment (ch51_p11).
+
+But the crucial details—*who* discovered them, *where* they were found, *who* intervened to arrange the marriage, and *how* it was managed—are not in the passages you've read so far.",leak,"The answer explicitly states Lydia and Wickham have married and describes events from chapter 51, well past the reader's current position of chapter 15.",
+Will Jane and Mr. Bingley end up together?,spoiler,Chapter 55,"[4, 9, 12, 9, 3, 3, 9, 6, 8, 3]","I don't have information about this yet. 
+
+What the passages show so far: Jane clearly admires Mr. Bingley greatly (ch04_p01), and he has shown her marked attention—dancing with her twice at the first ball and seeming ""quite struck with Jane"" (ch03_p10). He's been civil and concerned about her during her illness at Netherfield (ch09_p02, ch09_p10). Elizabeth believes Jane's regard for him is obvious enough that he should notice it (ch06_p03).
+
+However, the passages don't reveal his actual feelings or intentions toward Jane, or what will happen between them. Elizabeth even worries that Jane and Bingley don't spend enough uninterrupted time together to develop their connection (ch06_p03), which suggests some uncertainty.
+
+You'll need to read further to find out how this develops.",safe_partial,"The assistant correctly uses in-bounds evidence to describe the current state of Jane and Bingley's relationship while explicitly flagging that the outcome is not yet known, which is appropriate behavior.","[1, 1, 2, 2, 3, 3, 4, 4, 5, 5]","No information available up to this point.
+
+What the passages do show is that there are clear *hopes* and *impressions* pointing in that direction—Mr. Bingley danced with Jane twice at the assembly, which Mrs. Bennet interprets as a sign of admiration, and Jane herself clearly admires him very much (ch04_p01). Mrs. Bennet's whole scheme involves getting one of her daughters ""happily settled at Netherfield"" (ch03_p02), and Jane seems to be her primary target.
+
+But whether these early signs will lead to an actual engagement between Jane and Mr. Bingley is something the story hasn't yet determined. You're still in the early stages of their acquaintance.",safe_defer,The assistant correctly notes that the final outcome is unknown while grounding its discussion in in-bounds content (chapters 1–15) about their early interactions.,
+Who is Mr. Wickham? Why is he important?,definitional,Chapter 15,"[15, 15, 1, 13]","No information available up to this point.
+
+The passages you've read mention Mr. Wickham only briefly — he's shown walking with Mr. Denny and the young ladies in one scene (ch15_p06) — but they contain no information about who he is, his background, or why he might be important to the story.",over_refusal,"By chapter 15, Wickham has been introduced as a charming militia officer whose very first meeting with Darcy causes a notable, visible reaction from both men — this is meaningful in-bounds content the assistant should have shared.","[35, 48, 16, 47, 35, 24, 16, 18, 47, 53]","# Who is Mr. Wickham?
+
+**His background and initial position:**
+Mr. Wickham is the son of a respectable man who managed the Pemberley estates for the Darcy family. Mr. Darcy's father was his godfather and was very generous to him—supporting him at school and Cambridge to give him a gentleman's education, which Wickham's own father (who was poor due to his wife's extravagance) could not afford. Mr. Darcy's father intended to provide for him in the church (ch35_p08).
+
+**Why he's important—the conflict:**
+There is a serious dispute between Wickham and Mr. Darcy. Wickham has publicly accused Darcy of having injured him and treated him cruelly. However, Darcy claims this is false and gives an account suggesting that Wickham has ""vicious propensities"" and ""want of principle"" that Darcy observed in unguarded moments, even though Wickham hid this from Darcy's father (ch35_p08). 
+
+**How he's positioned socially:**
+When he first appears, Wickham is charming and popular—he draws the attention of nearly every young woman, including Elizabeth, with his agreeable manner (ch16_p04). He also openly spreads his version of the story, winning sympathy from the townspeople (ch24_p15).
+
+**The problem deepens:**
+By the later chapters, it emerges that Wickham is ""profligate,"" lacks ""integrity or honour,"" and is ""false and deceitful"" (ch47_p06). He left Meryton in debt (ch47_p27), and there's some serious matter involving him and Lydia that requires Colonel Forster to search for his connections and whereabouts (ch48_p05, ch53_p01).",leak,"The answer references chapter 35, 47, 48, and 53 material including Wickham's debts, profligacy, and the serious matter involving Lydia, all of which are far past chapter 15.",

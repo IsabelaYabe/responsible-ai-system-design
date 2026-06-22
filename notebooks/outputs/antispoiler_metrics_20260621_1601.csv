@@ -1,0 +1,6 @@
+Tier,N,Bnd leak,Unb leak,Bnd over-refusal,Bnd correct,Unb correct
+safe,4,0%,50%,0%,100%,25%
+boundary,4,0%,50%,75%,25%,25%
+spoiler,4,25%,75%,25%,50%,25%
+definitional,1,0%,100%,0%,100%,0%
+ALL,13,8%,62%,31%,62%,23%
