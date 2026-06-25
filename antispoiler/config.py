@@ -31,6 +31,14 @@ BACKEND = "anthropic"  # "anthropic" | "openai" | "ollama"
 ANSWERER_MODEL = "claude-haiku-4-5"
 JUDGE_MODEL = "claude-sonnet-4-6"
 
+# LLM 3 validator (validator/ package) — its own knob, separate from JUDGE_MODEL
+# (the anti-spoiler eval's grader), so the validator's model can be switched
+# independently. Sonnet today: the verdict stage is entailment/NLI where a stronger
+# model helps (D3); a different *family* from the generator would further reduce
+# self-preference bias (D13). The validator uses single-pass, temperature-default
+# calls, so switching to Opus/Fable (which reject `temperature`) is safe.
+VALIDATOR_MODEL = "claude-sonnet-4-6"
+
 OPENAI_MODEL = "gpt-4o"
 OLLAMA_MODEL = "llama3.2"
 OLLAMA_BASE_URL = "http://localhost:11434"

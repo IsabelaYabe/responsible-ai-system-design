@@ -87,3 +87,10 @@ def make_answerer(api_key: str | None = None) -> LLMClient:
 def make_judge(api_key: str | None = None) -> LLMClient:
     """Stronger model than the answerer, to reduce self-preference bias."""
     return LLMClient(api_key=api_key, model=config.JUDGE_MODEL)
+
+
+def make_validator(api_key: str | None = None) -> LLMClient:
+    """The LLM 3 validator (validator/ package), on its own VALIDATOR_MODEL knob so
+    it can be switched independently of the eval's judge. Stronger than the
+    generator, a different size to reduce self-preference bias (D13)."""
+    return LLMClient(api_key=api_key, model=config.VALIDATOR_MODEL)
