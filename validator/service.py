@@ -26,11 +26,35 @@ from typing import Callable
 from antispoiler.book import Chunk
 from antispoiler.retrieval import format_context
 
-from .core import ValidatorLLM, to_ui_payload, validate, validate_paraphrase
+from . import dictionary
+from .core import (
+    ValidatorLLM,
+    to_ui_payload,
+    validate,
+    validate_definition,
+    validate_paraphrase,
+)
 
-# Features that route through LLM 3 today. ROADMAP: define (dictionary + passage,
-# context-sensitive word sense).
-VALIDATED_FEATURES = {"contextualize", "recall", "paraphrase"}
+# All four reader features now route through LLM 3.
+VALIDATED_FEATURES = {"contextualize", "recall", "paraphrase", "define"}
+
+# Define is overloaded: a single word / short term is a dictionary lookup (lexical-
+# semantic), but a multi-word phrase "definition" is really a contextual explanation.
+# Selections at or under this many words take the dictionary check; longer ones are
+# routed to the context-grounded check. (Tunable.)
+DEFINE_TERM_MAX_WORDS = 2
+
+# Per-feature selective-prediction threshold τ, calibrated offline (D25 / OBSERVATIONS
+# Run 12, notebook v3). Two checks underlie the four features: the context-grounded
+# check (contextualize, recall, and the multi-word define route) calibrates to 0.80;
+# the single-verdict checks (paraphrase, definition) to 0.85. Values are illustrative
+# (tiny single-annotator gold sets) — trust the shape, not the exact decimals.
+CONF_THRESHOLD_BY_FEATURE = {
+    "contextualize": 0.80,
+    "recall": 0.80,
+    "paraphrase": 0.85,
+    "define": 0.85,
+}
 
 
 def _evidence(chunks: list[Chunk]) -> list[dict]:
@@ -55,6 +79,19 @@ def _span_evidence(selected_text: str) -> list[dict]:
             "chapter_label": "Selected passage",
             "paragraph_index": 0,
             "text": selected_text,
+        }
+    ]
+
+
+def _dictionary_evidence(term: str, senses_text: str) -> list[dict]:
+    """The dictionary senses as a single evidence entry — the lexical grounding
+    source for a definition (§3/§7)."""
+    return [
+        {
+            "chunk_id": "dictionary",
+            "chapter_label": f'Dictionary — "{term}"',
+            "paragraph_index": 0,
+            "text": senses_text or "No dictionary entry found for this term.",
         }
     ]
 
@@ -94,28 +131,52 @@ def validate_response(
     chunks. Out-of-scope features get a disabled payload the UI renders honestly.
     """
     if intention not in VALIDATED_FEATURES:
-        return _disabled(
-            "feature_roadmap",
-            f"Validation isn't enabled for '{intention}' yet (roadmap: define).",
-        )
+        return _disabled("feature_roadmap", f"Validation isn't enabled for '{intention}'.")
 
     # Paraphrase — bidirectional meaning preservation vs. the selected span (no retrieval).
     if intention == "paraphrase":
         if not selected_text.strip():
             return _disabled("no_grounding", "No selected passage to check the paraphrase against.")
         return _safe_payload(
-            lambda: validate_paraphrase(validator, selected_text, answer),
+            lambda: validate_paraphrase(
+                validator, selected_text, answer, CONF_THRESHOLD_BY_FEATURE["paraphrase"]
+            ),
             _span_evidence(selected_text),
         )
 
+    # Define — routed by selection shape (the button is overloaded):
+    #   short term    -> lexical-semantic dictionary check (valid meaning + passage sense)
+    #   phrase/clause -> context-grounded faithfulness check (a contextual explanation)
+    if intention == "define":
+        term = selected_text.strip()
+        if not term:
+            return _disabled("no_grounding", "No selected text to define.")
+        if len(term.split()) <= DEFINE_TERM_MAX_WORDS:
+            senses_text = dictionary.lookup_text(term)
+            return _safe_payload(
+                lambda: validate_definition(
+                    validator, term, answer, format_context(chunks), senses_text,
+                    CONF_THRESHOLD_BY_FEATURE["define"],
+                ),
+                _dictionary_evidence(term, senses_text) + _evidence(chunks),
+            )
+        # Multi-word: validate the explanation for passage-faithfulness (additions allowed
+        # if grounded; lexical/world glosses it can't ground surface as Unverifiable -> Hedged).
+        # This runs the context-grounded check, so it takes the CONTEXT τ, not the dictionary one.
+        passage = f'SELECTED PASSAGE (the text being explained):\n"""{term}"""\n\n{format_context(chunks)}'
+        return _safe_payload(
+            lambda: validate(validator, answer, passage, CONF_THRESHOLD_BY_FEATURE["contextualize"]),
+            _span_evidence(term) + _evidence(chunks),
+        )
+
     # Contextualize and Recall (context-grounded features) - Their claims are checked
-    # against the retrieved chunks the generator saw (D15).
+    # against the retrieved chunks the generator saw (D15). Both use the context τ.
     if not chunks:
         return _disabled(
             "no_grounding",
             "No in-bounds passages were retrieved, so there's nothing to validate against.",
         )
     return _safe_payload(
-        lambda: validate(validator, answer, format_context(chunks)),
+        lambda: validate(validator, answer, format_context(chunks), CONF_THRESHOLD_BY_FEATURE[intention]),
         _evidence(chunks),
     )

@@ -21,12 +21,14 @@ from .core import (
     to_ui_payload,
     validate,
     validate_claim,
+    validate_definition,
     validate_paraphrase,
 )
 
 __all__ = [
     "validate",
     "validate_paraphrase",
+    "validate_definition",
     "to_ui_payload",
     "decompose_and_route",
     "validate_claim",

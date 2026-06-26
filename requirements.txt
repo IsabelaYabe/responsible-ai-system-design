@@ -10,6 +10,7 @@ numpy>=1.26
 pandas>=2.0
 scikit-learn>=1.3        # Cohen's kappa for judge validation
 python-dotenv>=1.0       # local .env credential fallback
+nltk>=3.8                # WordNet dictionary grounding for the definition validator
 
 # Interactive demo (app.py) — not needed for the eval/notebook.
 fastapi>=0.110

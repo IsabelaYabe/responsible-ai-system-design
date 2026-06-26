@@ -232,6 +232,47 @@ Findings:
 - Verdict: **verbalized confidence validated as a usable abstention score on this set; keep it (D19), do not
   retire it.** Caveat: 24 items is still small, and the 2 errors coincide with annotation-debatable items.
 
+### Run 12 — v3 per-feature τ calibration — 2026-06-26
+- Notebook: `notebooks/validator_judge_poc_v3.ipynb`. Calibrated a **separate** selective-prediction threshold
+  per feature by running the **live** validator package on a small gold set per slice (method = v2 §7:
+  AUROC → risk–coverage → pick τ at target committed-accuracy 0.90). See **D25**.
+- Per-slice results (gold sizes after expansion):
+
+  | slice | n | judge acc | AUROC | auto-pick τ | **chosen τ** |
+  |---|---|---|---|---|---|
+  | contextualize | 24 | 0.92 | 0.91 | 0.80 | **0.80** |
+  | recall | 18 | 0.94 | 0.68 | 0.75 | **0.80** (shared) |
+  | paraphrase | 21 | 0.76 | 0.78 | 0.99 | **0.85** (override) |
+  | define | 28 | 0.79 | 0.83 | 0.90 | **0.85** (override) |
+
+- Findings:
+  1. **Confidence quality is feature-dependent.** Strong for the context-grounded claims (AUROC 0.91),
+     moderate for define (0.83), weak for paraphrase (0.78). `contextualize` and `recall` run the SAME
+     `validate_claim` check, both are highly accurate (0.92 / 0.94) and calibrate to ~commit-all, so they
+     **share one threshold (0.80)**; recall's low AUROC is just too-few-errors (one debatable miss), not a
+     bad score.
+  2. **The auto-pick over-hedges the single-verdict checks.** Paraphrase only reaches 0.90 committed-accuracy
+     at τ=0.99 (coverage 0.33 — hedges 2/3); define at τ=0.90 (coverage 0.64 — and it hedges *correct*
+     wrong-sense catches at conf 0.85, the feature's whole value). Both overridden to **0.85**. Justification:
+     confidence is a weak/moderate abstention signal there, and the residual errors are **safe-side
+     over-strictness** (faithful answers → Partially/Contradicted; imprecise defs → Contradicted), never false
+     reassurance — so committing at high coverage is low-risk for a comprehension aid.
+  3. **Errors concentrate on the `Partially supported` boundary.** Both paraphrase and define miss mainly by
+     mishandling *valid-but-imprecise* answers (rounding Partially↔Supported, or over-calling Contradicted on
+     imprecise definitions: amiable/fine/manner at conf 0.85). This is a **prompt** issue (teach the checks to
+     use Partially for imprecise-but-valid), not a τ issue.
+  4. **`define` needed harder items to measure at all** — at 10 items it had 1 error (AUROC noise 0.42–0.56);
+     adding borderline Partially + subtle wrong-sense items (28 total) produced 6 errors and a meaningful
+     AUROC 0.83. `recall` stayed near-error-free → AUROC 0.68 is weak by construction (a good problem).
+  5. **Net pattern:** τ collapses to **0.80** (strong context-grounded check) and **0.85** (weaker
+     single-verdict checks) — a clean, defensible split.
+- Bug fixed mid-run: `parse_json_response` raised `JSONDecodeError: Extra data` when the validator returned
+  **two** JSON objects; rewritten to `raw_decode` the FIRST JSON value (live fix in `validator/core.py`,
+  benefits the app and every slice).
+- `CONF_THRESHOLD_BY_FEATURE = {"contextualize": 0.80, "recall": 0.80, "paraphrase": 0.85, "define": 0.85}`.
+  Values remain **illustrative** (tiny single-annotator gold sets); now **wired into the live gate** — `service.py`
+  passes each feature's τ through to `map_to_ui`, and the τ used is shown in the UI tooltip (D25).
+
 ---
 
 ## Closing summary — PoC characterization (2026-06-24)

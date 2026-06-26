@@ -38,6 +38,7 @@ from .retrieval import (
     format_context,
     recall_retrieve,
     retrieve_embedding,
+    retrieve_lexical,
 )
 
 INTENTIONS = ("define", "paraphrase", "contextualize", "recall")
@@ -59,14 +60,21 @@ def _preamble() -> str:
 
 
 def _define(llm: LLMClient, index: EmbeddingIndex, span: str, pos: int | None):
-    ctx = retrieve_embedding(index, span, pos, top_k=4)
+    # Find where the term actually appears (lexical substring) so the model sees the
+    # real usage — embedding kNN on a single word often misses the literal occurrence,
+    # which made the model refuse ("I don't see that word in the passages"). Fall back
+    # to embedding similarity when there is no in-bounds literal match.
+    ctx = retrieve_lexical(index.chunks, span, pos, max_results=3) or retrieve_embedding(
+        index, span, pos, top_k=4
+    )
     system = (
         _preamble() + "\n\n"
         "The reader selected a word or short phrase and wants its meaning AS USED "
-        "in what they are reading. Give a brief definition in plain language. For "
-        "ordinary vocabulary, answer from general knowledge. If the selection's "
-        "sense depends on this book specifically, ground it in the passages below "
-        "and nothing later. Two or three sentences at most."
+        "in what they are reading. Always give a brief definition in plain language — "
+        "never refuse or ask the reader for the passage. For ordinary vocabulary, "
+        "answer from general knowledge even if the word is not in the passages below. "
+        "If the selection's sense depends on this book specifically, ground it in the "
+        "passages below and nothing later. Two or three sentences at most."
     )
     user = (
         f'SELECTED WORD/PHRASE: "{span}"\n\n'

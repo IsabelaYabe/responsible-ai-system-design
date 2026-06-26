@@ -52,35 +52,42 @@ SEVERITY = {"Supported": 0, "Partially supported": 1, "Unverifiable": 2, "Contra
 CONF_THRESHOLD = 0.85
 
 # Canonical UI copy for each 3-way state (design doc §6 / D11). The frontend
-# styles these; this is the source-of-truth wording.
-BANNER = {"Valid": "VALID", "Not reliable": "NOT RELIABLE", "Hedged": "HEDGED"}
+# styles these; this is the source-of-truth wording. Keys are the internal state
+# names (the design-doc "Hedged" stays); BANNER values are the reader-facing labels
+# ("Hedged" is shown as "NEEDS CHECKING" — clearer that the answer is unconfirmed,
+# not wrong).
+BANNER = {"Valid": "VALID", "Not reliable": "NOT RELIABLE", "Hedged": "NEEDS CHECKING"}
 MESSAGE = {
     "Valid": "Verified against the passages you've read.",
     "Not reliable": "Couldn't give a reliable response this time.",
-    "Hedged": "Couldn't fully verify this — read it with care.",
+    "Hedged": "Couldn't fully verify this — worth double-checking yourself.",
 }
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 def parse_json_response(raw: str) -> Any:
-    """Strip ```fences``` and parse JSON (models often wrap JSON in markdown).
+    """Strip ```fences``` and parse the FIRST JSON value in the response.
 
-    Falls back to extracting the outermost array/object if the model added stray
-    prose around the JSON. Truncated JSON (hit the token cap) cannot be salvaged
-    and re-raises with a clear message — the fix for that is a larger max_tokens.
+    Uses `raw_decode` so trailing prose — or a second JSON object the model
+    sometimes appends — is ignored instead of raising "Extra data" (which the old
+    greedy-regex fallback made worse by capturing both objects). Each candidate
+    start is tried, so a stray leading brace doesn't break parsing. A genuinely
+    malformed/truncated value still raises — fix that with a larger max_tokens.
     """
     raw = raw.strip()
     if raw.startswith("```"):
         raw = re.sub(r"^```[\w]*\n?", "", raw)
         raw = re.sub(r"\n?```$", "", raw)
     raw = raw.strip()
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        m = re.search(r"(\[.*\]|\{.*\})", raw, re.DOTALL)  # tolerate prose around the JSON
-        if m:
-            return json.loads(m.group(1))
-        raise
+    decoder = json.JSONDecoder()
+    for i, ch in enumerate(raw):
+        if ch in "{[":
+            try:
+                obj, _ = decoder.raw_decode(raw, i)  # first JSON value; ignores trailing data
+                return obj
+            except json.JSONDecodeError:
+                continue
+    raise ValueError(f"No parseable JSON in model response: {raw[:200]!r}")
 
 
 def parallel_map(fn: Callable, items, max_workers: int = 6) -> list:
@@ -238,23 +245,28 @@ def map_to_ui(agg: dict, verdicts: list[dict], conf_threshold: float | None = No
         "answer_verdict": verdict,
         "answer_confidence": answer_conf,
         "high_uncertainty": high_uncertainty,
+        "conf_threshold": conf_threshold,  # the tau actually applied (per-feature; D25)
     }
 
 
 # ── Capstone — the validator as one call ──────────────────────────────────────
-def validate(validator: ValidatorLLM, answer: str, passage: str) -> dict:
+def validate(
+    validator: ValidatorLLM, answer: str, passage: str, conf_threshold: float | None = None
+) -> dict:
     """Run the full per-request validator on one generated answer.
 
     `passage` is the grounding text — in the live demo this is the SAME retrieved,
     position-bounded chunks the generator saw (D15), formatted as one string. The
-    per-claim verdict calls are parallelized (I/O-bound).
+    per-claim verdict calls are parallelized (I/O-bound). `conf_threshold` is the
+    selective-prediction τ; the service passes the per-feature value (D25), and
+    None falls back to the global CONF_THRESHOLD.
     """
     claims = decompose_and_route(validator, answer)
     verdicts = parallel_map(
         lambda c: validate_claim(validator, c["claim"], c["grounding"], passage), claims
     )
     agg = aggregate(verdicts)
-    ui = map_to_ui(agg, verdicts)
+    ui = map_to_ui(agg, verdicts, conf_threshold)
     return {"claims": claims, "verdicts": verdicts, "aggregate": agg, "ui": ui}
 
 
@@ -296,17 +308,21 @@ def paraphrase_verdict_once(validator: ValidatorLLM, source_text: str, paraphras
     return parse_json_response(raw)
 
 
-def validate_paraphrase(validator: ValidatorLLM, source_text: str, paraphrase_text: str) -> dict:
+def validate_paraphrase(
+    validator: ValidatorLLM, source_text: str, paraphrase_text: str, conf_threshold: float | None = None
+) -> dict:
     """Validate a paraphrase against its source span — same result shape as validate(),
     so the shared aggregate / UI gate / payload machinery is reused unchanged.
 
     The bidirectional check is a single verdict (the "minimal" paraphrase validator,
     §11) surfaced as one row in the §7 path; the per-direction findings (added /
-    dropped / distorted) are named in its `reason`.
+    dropped / distorted) are named in its `reason`. `conf_threshold` is the per-feature
+    selective-prediction τ (D25); None falls back to the global CONF_THRESHOLD.
     """
     v = paraphrase_verdict_once(validator, source_text, paraphrase_text)
     row = {
-        "claim": "The paraphrase preserves the meaning of the selected passage (nothing added, dropped, or distorted).",
+        # Phrased as a criterion so the verdict chip reads naturally (see _DEFINE_CLAIM).
+        "claim": "Paraphrase should preserve the selected passage's meaning (nothing added, dropped, or distorted).",
         "grounding": "paraphrase",
         "verdict": v["verdict"],
         "verbalized_conf": v.get("confidence"),
@@ -315,7 +331,98 @@ def validate_paraphrase(validator: ValidatorLLM, source_text: str, paraphrase_te
     verdicts = [row]
     claims = [{"claim": row["claim"], "grounding": "paraphrase"}]
     agg = aggregate(verdicts)
-    ui = map_to_ui(agg, verdicts)
+    ui = map_to_ui(agg, verdicts, conf_threshold)
+    return {"claims": claims, "verdicts": verdicts, "aggregate": agg, "ui": ui}
+
+
+# ── Definition check — lexical-semantic (design doc §3, D14/D15) ──────────────
+# Two grounding sources: a DICTIONARY (does the definition name a real meaning of
+# the term?) and the PASSAGE (is it the right sense for how the term is used here?).
+# Used only for single-word / short-term selections; multi-word phrase "definitions"
+# are routed to the context-grounded check by the service layer.
+SYSTEM_DEFINE = """You are the definition-validation stage of a validation system for a reading assistant.
+
+You are given a TERM the reader selected, a DEFINITION of it produced by the assistant, DICTIONARY SENSES of
+the term (the grounding for what the term CAN mean), and a SOURCE PASSAGE (how the term is used in what the
+reader has read). Decide whether the assistant's definition is BOTH:
+  (1) lexically valid - it matches one of the dictionary senses (do not accept a meaning the term does not
+      have, even if it sounds plausible); and
+  (2) the correct sense for THIS passage - the sense the definition expresses is the one actually used in the
+      source passage.
+
+Judge ONLY from the dictionary senses and the passage. Do not rely on outside knowledge of the book.
+
+Verdict, exactly one of:
+- "Supported"           : a valid dictionary sense AND the correct sense for this passage.
+- "Partially supported" : a valid sense but imprecise, or it gives the right sense among others without
+                          committing to the one this passage uses.
+- "Contradicted"        : not a real meaning of the term, or a real meaning but the WRONG sense for this passage.
+- "Unverifiable"        : the dictionary senses are missing or insufficient to confirm the definition.
+
+Also report your confidence that your verdict is correct, as a number from 0.0 to 1.0.
+
+Output ONLY a JSON object, no prose, no markdown fences:
+  {"verdict": "<one label>", "confidence": <0.0-1.0>, "reason": "<one sentence: which sense, and whether it fits the passage>"}
+"""
+
+# Phrased as a CRITERION (not an assertion) so the verdict chip reads naturally:
+# "Supported" = the criterion holds, "Contradicted" = it fails.
+_DEFINE_CLAIM = 'Definition of "{term}"'
+
+
+def definition_verdict_once(
+    validator: ValidatorLLM, term: str, definition: str, passage: str, dictionary_text: str
+) -> dict:
+    """One grounded verdict for a definition (lexical validity + passage sense)."""
+    user = (
+        f"TERM:\n{term}\n\n"
+        f"DEFINITION (to validate):\n{definition}\n\n"
+        f"DICTIONARY SENSES:\n{dictionary_text}\n\n"
+        f"SOURCE PASSAGE:\n{passage}"
+    )
+    raw = validator.complete(SYSTEM_DEFINE, user, max_tokens=512)
+    return parse_json_response(raw)
+
+
+def validate_definition(
+    validator: ValidatorLLM,
+    term: str,
+    definition: str,
+    passage: str,
+    dictionary_text: str,
+    conf_threshold: float | None = None,
+) -> dict:
+    """Validate a definition against its dictionary senses + passage — same result
+    shape as validate(), so the shared aggregate / UI gate / payload tail is reused.
+
+    A dictionary miss (no senses — archaic word, phrase, proper noun) short-circuits
+    to Unverifiable without an LLM call: the lexical axis can't be grounded, so the
+    honest verdict is "couldn't verify" -> Hedged (the §5 / D15 grounding boundary).
+    `conf_threshold` is the per-feature selective-prediction τ (D25); None falls back
+    to the global CONF_THRESHOLD.
+    """
+    claim = _DEFINE_CLAIM.format(term=term)
+    if not (dictionary_text and dictionary_text.strip()):
+        row = {
+            "claim": claim,
+            "grounding": "definition",
+            "verdict": "Unverifiable",
+            "verbalized_conf": 1.0,
+            "reason": f'No dictionary entry was found for "{term}", so the definition could not be grounded.',
+        }
+    else:
+        v = definition_verdict_once(validator, term, definition, passage, dictionary_text)
+        row = {
+            "claim": claim,
+            "grounding": "definition",
+            "verdict": v["verdict"],
+            "verbalized_conf": v.get("confidence"),
+            "reason": v.get("reason", ""),
+        }
+    verdicts = [row]
+    claims = [{"claim": claim, "grounding": "definition"}]
+    agg = aggregate(verdicts)
+    ui = map_to_ui(agg, verdicts, conf_threshold)
     return {"claims": claims, "verdicts": verdicts, "aggregate": agg, "ui": ui}
 
 
@@ -338,7 +445,7 @@ def to_ui_payload(result: dict) -> dict:
         "answer_verdict": ui["answer_verdict"],
         "answer_confidence": ui["answer_confidence"],
         "high_uncertainty": ui["high_uncertainty"],
-        "conf_threshold": CONF_THRESHOLD,
+        "conf_threshold": ui.get("conf_threshold", CONF_THRESHOLD),  # the per-feature τ actually used (D25)
         "counts": agg["counts"],
         "n_claims": agg["n_claims"],
         "claims": [

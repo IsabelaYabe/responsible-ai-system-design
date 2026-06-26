@@ -34,7 +34,7 @@ from antispoiler.index import build_index
 from antispoiler.llm_client import LLMClient, make_validator
 from antispoiler.respond import INTENTIONS, respond_with_evidence
 
-from validator import CONF_THRESHOLD
+from validator import CONF_THRESHOLD, dictionary
 from validator.service import VALIDATED_FEATURES, validate_response
 
 app = FastAPI(title="Anti-spoiler reading companion (demo)")
@@ -50,6 +50,8 @@ VALIDATOR = make_validator()                          # validator LLM 3 (config.
 MAX_CHAPTER = max(c.chapter_index for c in CHUNKS)
 print(f"Ready: {len(CHUNKS)} chunks across {MAX_CHAPTER} chapters.")
 print(f"Validator: model={VALIDATOR.model}  tau={CONF_THRESHOLD}  features={sorted(VALIDATED_FEATURES)}")
+_dict_ok, _dict_detail = dictionary.available()  # warms the WordNet corpus; surfaces setup issues now
+print(f"Dictionary: {'OK' if _dict_ok else 'UNAVAILABLE'} — {_dict_detail}")
 
 
 class RespondRequest(BaseModel):
