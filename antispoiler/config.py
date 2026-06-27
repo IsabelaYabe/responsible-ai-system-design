@@ -33,7 +33,7 @@ APP_MODE = os.environ.get("APP_MODE", "prod").strip().lower()
 # OpenRouter is OpenAI-compatible. The dev model is overridable so you can swap cheap
 # models without editing code:  OPENROUTER_MODEL=deepseek/deepseek-chat APP_MODE=dev …
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "deepseek/deepseek-v4-pro")
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "deepseek/deepseek-chat")
 
 if APP_MODE == "dev":
     BACKEND = "openrouter"

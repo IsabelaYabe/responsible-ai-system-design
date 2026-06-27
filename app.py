@@ -113,7 +113,22 @@ def do_respond(req: RespondRequest):
     pos = max(1, min(int(req.reader_position), MAX_CHAPTER))
 
     # Generate (LLM 1/1.2), keeping the retrieved grounding chunks for the validator.
-    out = respond_with_evidence(LLM, INDEX, req.selected_text, req.intention, pos)
+    # A generation failure must not 500 the request — degrade to an honest message
+    # (e.g. a cheap dev model returning an empty response).
+    try:
+        out = respond_with_evidence(LLM, INDEX, req.selected_text, req.intention, pos)
+    except Exception as e:
+        print(f"[generator] failed: {type(e).__name__}: {e}")
+        return {
+            "answer": f"The assistant couldn't generate a response this time ({type(e).__name__}).",
+            "intention": req.intention,
+            "reader_position": pos,
+            "validation": {
+                "enabled": False,
+                "reason": "generation_error",
+                "note": f"Generation failed ({type(e).__name__}); there's nothing to validate.",
+            },
+        }
     answer = out["answer"]
 
     # Validate (LLM 3) — blocking; the frontend shows a spinner meanwhile.

@@ -51,6 +51,14 @@
   .answer .md li { margin:2px 0; }
   .answer .md code { background:#eef2f5; padding:1px 4px; border-radius:4px; font-size:13px; }
   .answer .md strong { font-weight:700; }
+  /* Define renders an overall meaning + a word list (dl) instead of prose. */
+  .answer .md .def-meaning { margin:0 0 12px; }
+  .answer .md .def-label { font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.05em; color:var(--muted); margin:0 0 4px; }
+  .answer .md .defs { margin:0; }
+  .answer .md .defs dt { font-weight:700; margin:10px 0 1px; }
+  .answer .md .defs dt:first-child { margin-top:0; }
+  .answer .md .defs dd { margin:0; color:var(--ink-soft, var(--ink)); }
   .muted { color:var(--muted); }
 
   /* ── Spinner (shown during the blocking generate+validate call) ── */
@@ -179,6 +187,29 @@ function esc(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 const fmtConf = (c) => (c === null || c === undefined) ? "n/a" : Number(c).toFixed(2);
+
+// Define returns structured JSON ({"meaning": "...", "definitions":[{word,definition}]});
+// render the overall meaning, then the word list.
+function renderDefinitions(el, answerJson) {
+  let obj = null;
+  try { obj = JSON.parse(answerJson); } catch (e) {}
+  if (!obj || typeof obj !== "object") {       // not JSON (e.g. a generation-error message)
+    el.innerHTML = `<p>${esc(answerJson)}</p>`;
+    return;
+  }
+  const meaning = (obj.meaning || "").trim();
+  const defs = obj.definitions || [];
+  let html = "";
+  if (meaning) html += `<p class="def-meaning">${esc(meaning)}</p>`;
+  if (defs.length) {
+    html += '<div class="def-label">Key words</div><dl class="defs">';
+    for (const d of defs) {
+      html += `<dt>${esc(d.word)}</dt><dd>${esc(d.definition)}</dd>`;
+    }
+    html += "</dl>";
+  }
+  el.innerHTML = html || '<p class="muted">Nothing to define here.</p>';
+}
 
 async function loadConfig() {
   const c = await (await fetch("/config")).json();
@@ -322,8 +353,13 @@ async function ask(intention) {
     answer.innerHTML = '<span class="tag"></span><div class="md"></div><div class="vhost"></div>';
     answer.querySelector(".tag").textContent = intention;
     const md = answer.querySelector(".md");
-    if (window.marked) md.innerHTML = marked.parse(data.answer);
-    else md.textContent = data.answer;
+    if (intention === "define") {
+      renderDefinitions(md, data.answer);          // structured JSON -> word list
+    } else if (window.marked) {
+      md.innerHTML = marked.parse(data.answer);    // prose -> markdown
+    } else {
+      md.textContent = data.answer;
+    }
     answer.querySelector(".vhost").innerHTML = renderValidation(data.validation);
   } catch (e) {
     stopSpinner();

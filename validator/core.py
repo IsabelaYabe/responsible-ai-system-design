@@ -51,6 +51,13 @@ SEVERITY = {"Supported": 0, "Partially supported": 1, "Unverifiable": 2, "Contra
 # (a project decision — revisit on a larger gold set). See OBSERVATIONS.md Run 11.
 CONF_THRESHOLD = 0.85
 
+# Output token cap for the per-claim verdict calls. It is a CAP, not a fixed cost:
+# strong models (prod Sonnet) emit short JSON and stop, so prod cost is unchanged.
+# The headroom is for reasoning models — e.g. cheap ones via OpenRouter in dev mode —
+# that spend tokens on hidden reasoning before emitting the JSON and would otherwise
+# return empty content (512 was too tight). Raise further if a reasoner still truncates.
+VERDICT_MAX_TOKENS = 2000
+
 # Canonical UI copy for each 3-way state (design doc §6 / D11). The frontend
 # styles these; this is the source-of-truth wording. Keys are the internal state
 # names (the design-doc "Hedged" stays); BANNER values are the reader-facing labels
@@ -171,7 +178,7 @@ def validate_claim_once(validator: ValidatorLLM, claim: str, passage: str) -> di
     ~1.00. The reliability signal that works (cross-run stability) lives offline.
     """
     user = f"SOURCE PASSAGE:\n{passage}\n\nCLAIM:\n{claim}"
-    raw = validator.complete(SYSTEM_VERDICT, user, max_tokens=512)
+    raw = validator.complete(SYSTEM_VERDICT, user, max_tokens=VERDICT_MAX_TOKENS)
     return parse_json_response(raw)
 
 
@@ -304,7 +311,7 @@ Output ONLY a JSON object, no prose, no markdown fences:
 def paraphrase_verdict_once(validator: ValidatorLLM, source_text: str, paraphrase_text: str) -> dict:
     """One bidirectional meaning-preservation verdict for a paraphrase (single pass)."""
     user = f"SOURCE PASSAGE:\n{source_text}\n\nPARAPHRASE:\n{paraphrase_text}"
-    raw = validator.complete(SYSTEM_PARAPHRASE, user, max_tokens=512)
+    raw = validator.complete(SYSTEM_PARAPHRASE, user, max_tokens=VERDICT_MAX_TOKENS)
     return parse_json_response(raw)
 
 
@@ -380,8 +387,36 @@ def definition_verdict_once(
         f"DICTIONARY SENSES:\n{dictionary_text}\n\n"
         f"SOURCE PASSAGE:\n{passage}"
     )
-    raw = validator.complete(SYSTEM_DEFINE, user, max_tokens=512)
+    raw = validator.complete(SYSTEM_DEFINE, user, max_tokens=VERDICT_MAX_TOKENS)
     return parse_json_response(raw)
+
+
+def _definition_row(
+    validator: ValidatorLLM, term: str, definition: str, passage: str, dictionary_text: str
+) -> dict:
+    """One verdict row for a single (term, definition) pair.
+
+    A dictionary miss (no senses — archaic word, phrase, proper noun) short-circuits
+    to Unverifiable without an LLM call: the lexical axis can't be grounded, so the
+    honest verdict is "couldn't verify" -> Hedged (the §5 / D15 grounding boundary).
+    """
+    claim = _DEFINE_CLAIM.format(term=term)
+    if not (dictionary_text and dictionary_text.strip()):
+        return {
+            "claim": claim,
+            "grounding": "definition",
+            "verdict": "Unverifiable",
+            "verbalized_conf": 1.0,
+            "reason": f'No dictionary entry was found for "{term}", so the definition could not be grounded.',
+        }
+    v = definition_verdict_once(validator, term, definition, passage, dictionary_text)
+    return {
+        "claim": claim,
+        "grounding": "definition",
+        "verdict": v["verdict"],
+        "verbalized_conf": v.get("confidence"),
+        "reason": v.get("reason", ""),
+    }
 
 
 def validate_definition(
@@ -392,35 +427,49 @@ def validate_definition(
     dictionary_text: str,
     conf_threshold: float | None = None,
 ) -> dict:
-    """Validate a definition against its dictionary senses + passage — same result
-    shape as validate(), so the shared aggregate / UI gate / payload tail is reused.
-
-    A dictionary miss (no senses — archaic word, phrase, proper noun) short-circuits
-    to Unverifiable without an LLM call: the lexical axis can't be grounded, so the
-    honest verdict is "couldn't verify" -> Hedged (the §5 / D15 grounding boundary).
-    `conf_threshold` is the per-feature selective-prediction τ (D25); None falls back
-    to the global CONF_THRESHOLD.
+    """Validate ONE (term, definition) pair — same result shape as validate(), so the
+    shared aggregate / UI gate / payload tail is reused. `conf_threshold` is the
+    per-feature selective-prediction τ (D25); None falls back to the global one.
+    (Used by the v3 calibration notebook; the live app uses validate_definitions.)
     """
-    claim = _DEFINE_CLAIM.format(term=term)
-    if not (dictionary_text and dictionary_text.strip()):
-        row = {
-            "claim": claim,
-            "grounding": "definition",
-            "verdict": "Unverifiable",
-            "verbalized_conf": 1.0,
-            "reason": f'No dictionary entry was found for "{term}", so the definition could not be grounded.',
-        }
-    else:
-        v = definition_verdict_once(validator, term, definition, passage, dictionary_text)
-        row = {
-            "claim": claim,
-            "grounding": "definition",
-            "verdict": v["verdict"],
-            "verbalized_conf": v.get("confidence"),
-            "reason": v.get("reason", ""),
-        }
+    row = _definition_row(validator, term, definition, passage, dictionary_text)
     verdicts = [row]
-    claims = [{"claim": claim, "grounding": "definition"}]
+    claims = [{"claim": row["claim"], "grounding": "definition"}]
+    agg = aggregate(verdicts)
+    ui = map_to_ui(agg, verdicts, conf_threshold)
+    return {"claims": claims, "verdicts": verdicts, "aggregate": agg, "ui": ui}
+
+
+def validate_define(
+    validator: ValidatorLLM,
+    meaning: str,
+    items: list[dict],
+    passage: str,
+    conf_threshold: float | None = None,
+) -> dict:
+    """Validate a Define answer that has BOTH an overall meaning and per-word definitions.
+
+    - `meaning` (the phrase's overall sense) -> context-grounded check: decomposed into
+      atomic claims and judged against the passage (the same check as contextualize).
+    - each `items` entry {word, definition, dictionary_text} -> lexical-semantic
+      dictionary check (one verdict row per word).
+    All verdict rows are merged and worst-case aggregated under one UI gate, so a wrong
+    overall meaning OR a wrong word definition flags the answer. Same result shape as
+    validate().
+    """
+    verdicts: list[dict] = []
+    if meaning and meaning.strip():
+        claims = decompose_and_route(validator, meaning)
+        verdicts += parallel_map(
+            lambda c: validate_claim(validator, c["claim"], c["grounding"], passage), claims
+        )
+    verdicts += parallel_map(
+        lambda it: _definition_row(
+            validator, it["word"], it["definition"], passage, it.get("dictionary_text", "")
+        ),
+        items,
+    )
+    claims = [{"claim": v["claim"], "grounding": v["grounding"]} for v in verdicts]
     agg = aggregate(verdicts)
     ui = map_to_ui(agg, verdicts, conf_threshold)
     return {"claims": claims, "verdicts": verdicts, "aggregate": agg, "ui": ui}
