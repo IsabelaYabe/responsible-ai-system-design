@@ -22,22 +22,38 @@ BOOK_AUTHOR = "Jane Austen"
 # Pride and Prejudice has 61 chapters; 15 ~= 25% through the book.
 READER_POSITION = 15
 
-# ── LLM BACKEND ──────────────────────────────────────────────────────────────
-BACKEND = "anthropic"  # "anthropic" | "openai" | "ollama"
+# ── LLM BACKEND — dev / prod modes ───────────────────────────────────────────
+# Selected by the APP_MODE env var (default "prod"), set on the run command:
+#   prod — Anthropic: Haiku generator + Sonnet validator (the characterized setup).
+#   dev  — OpenRouter: one cheap model for fast/cheap iteration. NOT for evaluation:
+#          it collapses the judge≠generator separation (D13) and isn't characterized.
+# Example:  APP_MODE=dev uvicorn app:app --port 8000
+APP_MODE = os.environ.get("APP_MODE", "prod").strip().lower()
 
-# Answerer vs. judge are deliberately different models: using the same model to
-# answer and to grade invites self-preference bias (judges favour their own
-# generations — see report's validation section). The judge is the stronger one.
-ANSWERER_MODEL = "claude-haiku-4-5"
-JUDGE_MODEL = "claude-sonnet-4-6"
+# OpenRouter is OpenAI-compatible. The dev model is overridable so you can swap cheap
+# models without editing code:  OPENROUTER_MODEL=deepseek/deepseek-chat APP_MODE=dev …
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "deepseek/deepseek-v4-pro")
 
-# LLM 3 validator (validator/ package) — its own knob, separate from JUDGE_MODEL
-# (the anti-spoiler eval's grader), so the validator's model can be switched
-# independently. Sonnet today: the verdict stage is entailment/NLI where a stronger
-# model helps (D3); a different *family* from the generator would further reduce
-# self-preference bias (D13). The validator uses single-pass, temperature-default
-# calls, so switching to Opus/Fable (which reject `temperature`) is safe.
-VALIDATOR_MODEL = "claude-sonnet-4-6"
+if APP_MODE == "dev":
+    BACKEND = "openrouter"
+    ANSWERER_MODEL = OPENROUTER_MODEL   # generator
+    JUDGE_MODEL = OPENROUTER_MODEL      # eval grader
+    VALIDATOR_MODEL = OPENROUTER_MODEL  # LLM 3 validator
+else:
+    BACKEND = "anthropic"  # "anthropic" | "openai" | "openrouter" | "ollama"
+    # Answerer vs. judge are deliberately different models: using the same model to
+    # answer and to grade invites self-preference bias (judges favour their own
+    # generations — see report's validation section). The judge is the stronger one.
+    ANSWERER_MODEL = "claude-haiku-4-5"
+    JUDGE_MODEL = "claude-sonnet-4-6"
+    # LLM 3 validator (validator/ package) — its own knob, separate from JUDGE_MODEL
+    # (the anti-spoiler eval's grader), so the validator's model can be switched
+    # independently. Sonnet today: the verdict stage is entailment/NLI where a stronger
+    # model helps (D3); a different *family* from the generator would further reduce
+    # self-preference bias (D13). The validator uses single-pass, temperature-default
+    # calls, so switching to Opus/Fable (which reject `temperature`) is safe.
+    VALIDATOR_MODEL = "claude-sonnet-4-6"
 
 OPENAI_MODEL = "gpt-4o"
 OLLAMA_MODEL = "llama3.2"
@@ -109,11 +125,13 @@ def get_secret(name: str, *aliases: str) -> str | None:
 
 
 def get_api_key() -> str | None:
-    """Anthropic/OpenAI API key. Accepts API_KEY or the vendor env names."""
+    """API key for the active BACKEND. Accepts API_KEY or the vendor env names."""
     if BACKEND == "anthropic":
         return get_secret("API_KEY", "ANTHROPIC_API_KEY")
     if BACKEND == "openai":
         return get_secret("API_KEY", "OPENAI_API_KEY")
+    if BACKEND == "openrouter":
+        return get_secret("OPENROUTER_API_KEY")
     return None  # ollama needs none
 
 

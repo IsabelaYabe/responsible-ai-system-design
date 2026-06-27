@@ -50,6 +50,29 @@ different Python is the usual cause of the `Dictionary: UNAVAILABLE` message bel
 The first request is slow (it downloads the embedding model and indexes the book
 once); the Define feature also needs the WordNet corpus (next section).
 
+### Dev mode — cheap models via OpenRouter
+
+For fast/cheap iteration, set `APP_MODE=dev` on the run command. This routes **both** the
+generator and the validator through a single cheap model on
+[OpenRouter](https://openrouter.ai) (OpenAI-compatible) instead of Anthropic. Add
+`OPENROUTER_API_KEY` to the repo-root `.env`, then:
+
+```bash
+APP_MODE=dev conda run -n antispoiler-arm uvicorn app:app --port 8000
+```
+
+The startup banner shows the active mode:
+
+```
+Mode: DEV  |  backend=openrouter  generator=deepseek/deepseek-v4-pro  validator=deepseek/deepseek-v4-pro
+```
+
+The default dev model is `deepseek/deepseek-v4-pro`; override it without editing code via
+`OPENROUTER_MODEL=<any OpenRouter model id>` (e.g. `OPENROUTER_MODEL=deepseek/deepseek-chat`).
+Dev mode is for development only — it uses one model for both roles, which collapses the
+validator≠generator separation (D13) and is **not** the characterized setup. **Prod is the
+default** (no flag) and keeps Anthropic Haiku + Sonnet.
+
 ## Installing nltk WordNet corpus for definition validator
 
 

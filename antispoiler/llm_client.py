@@ -43,6 +43,12 @@ class LLMClient:
             key = key or os.environ.get("OPENAI_API_KEY")
             self._client = openai.OpenAI(api_key=key)
             self._model = model or config.OPENAI_MODEL
+        elif self.backend == "openrouter":
+            import openai  # OpenRouter exposes an OpenAI-compatible API
+
+            key = key or os.environ.get("OPENROUTER_API_KEY")
+            self._client = openai.OpenAI(api_key=key, base_url=config.OPENROUTER_BASE_URL)
+            self._model = model or config.OPENROUTER_MODEL
         elif self.backend == "ollama":
             import openai  # Ollama exposes an OpenAI-compatible /v1 endpoint
 
@@ -52,7 +58,8 @@ class LLMClient:
             self._model = model or config.OLLAMA_MODEL
         else:
             raise ValueError(
-                f"Unknown backend {self.backend!r}. Choose anthropic | openai | ollama"
+                f"Unknown backend {self.backend!r}. "
+                "Choose anthropic | openai | openrouter | ollama"
             )
 
     @property
@@ -68,7 +75,7 @@ class LLMClient:
                 messages=[{"role": "user", "content": user}],
             )
             return msg.content[0].text.strip()
-        # openai-compatible (openai + ollama)
+        # openai-compatible (openai + openrouter + ollama)
         resp = self._client.chat.completions.create(
             model=self._model,
             max_tokens=max_tokens,

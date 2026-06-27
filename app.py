@@ -41,11 +41,18 @@ app = FastAPI(title="Anti-spoiler reading companion (demo)")
 
 _STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
+# Mode banner (prod = Anthropic Haiku+Sonnet; dev = one cheap model via OpenRouter).
+print(f"Mode: {config.APP_MODE.upper()}  |  backend={config.BACKEND}  "
+      f"generator={config.ANSWERER_MODEL}  validator={config.VALIDATOR_MODEL}")
+if config.APP_MODE == "dev":
+    print("  ⚠  dev mode: one cheap model via OpenRouter — for iteration only, NOT the "
+          "characterized setup (validator==generator breaks D13).")
+
 # Built once at import time. Heavy (model download + embedding) but one-off.
 print("Loading book and building index (first run downloads the embedding model)…")
 CHUNKS = fetch_and_chunk()
 INDEX = build_index(CHUNKS)
-LLM = LLMClient(model=config.ANSWERER_MODEL)          # generator (Haiku)
+LLM = LLMClient(model=config.ANSWERER_MODEL)          # generator
 VALIDATOR = make_validator()                          # validator LLM 3 (config.VALIDATOR_MODEL); validator != generator (D13)
 MAX_CHAPTER = max(c.chapter_index for c in CHUNKS)
 print(f"Ready: {len(CHUNKS)} chunks across {MAX_CHAPTER} chapters.")
