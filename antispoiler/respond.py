@@ -38,6 +38,7 @@ from .retrieval import (
     format_context,
     recall_retrieve,
     retrieve_embedding,
+    retrieve_lexical,
 )
 
 INTENTIONS = ("define", "paraphrase", "contextualize", "recall")
@@ -59,14 +60,21 @@ def _preamble() -> str:
 
 
 def _define(llm: LLMClient, index: EmbeddingIndex, span: str, pos: int | None):
-    ctx = retrieve_embedding(index, span, pos, top_k=4)
+    # Find where the term actually appears (lexical substring) so the model sees the
+    # real usage — embedding kNN on a single word often misses the literal occurrence,
+    # which made the model refuse ("I don't see that word in the passages"). Fall back
+    # to embedding similarity when there is no in-bounds literal match.
+    ctx = retrieve_lexical(index.chunks, span, pos, max_results=3) or retrieve_embedding(
+        index, span, pos, top_k=4
+    )
     system = (
         _preamble() + "\n\n"
         "The reader selected a word or short phrase and wants its meaning AS USED "
-        "in what they are reading. Give a brief definition in plain language. For "
-        "ordinary vocabulary, answer from general knowledge. If the selection's "
-        "sense depends on this book specifically, ground it in the passages below "
-        "and nothing later. Two or three sentences at most."
+        "in what they are reading. Always give a brief definition in plain language — "
+        "never refuse or ask the reader for the passage. For ordinary vocabulary, "
+        "answer from general knowledge even if the word is not in the passages below. "
+        "If the selection's sense depends on this book specifically, ground it in the "
+        "passages below and nothing later. Two or three sentences at most."
     )
     user = (
         f'SELECTED WORD/PHRASE: "{span}"\n\n'
@@ -74,7 +82,7 @@ def _define(llm: LLMClient, index: EmbeddingIndex, span: str, pos: int | None):
         if ctx
         else f'SELECTED WORD/PHRASE: "{span}"\n\n(No surrounding passages retrieved.)'
     )
-    return llm.complete(system, user), [c.chapter_index for c in ctx], None
+    return llm.complete(system, user), ctx, None
 
 
 def _paraphrase(llm: LLMClient, span: str):
@@ -86,6 +94,7 @@ def _paraphrase(llm: LLMClient, span: str):
         "foreshadow. Just say the same thing in plainer words."
     )
     user = f'SELECTED PASSAGE:\n"""{span}"""\n\nParaphrase it in plain English.'
+    # No retrieval: paraphrase grounds on the selected span itself (D15).
     return llm.complete(system, user), [], None
 
 
@@ -105,7 +114,7 @@ def _contextualize(llm: LLMClient, index: EmbeddingIndex, span: str, pos: int | 
         if ctx
         else f'SELECTED PASSAGE:\n"""{span}"""\n\n(No in-bounds passages retrieved.)'
     )
-    return llm.complete(system, user), [c.chapter_index for c in ctx], None
+    return llm.complete(system, user), ctx, None
 
 
 def _recall(llm: LLMClient, index: EmbeddingIndex, span: str, pos: int | None):
@@ -140,7 +149,7 @@ def _recall(llm: LLMClient, index: EmbeddingIndex, span: str, pos: int | None):
         f"{format_context(hits)}\n\n"
         f'Summarise what has been shown about "{entity}" so far.'
     )
-    return llm.complete(system, user), [c.chapter_index for c in hits], entity
+    return llm.complete(system, user), hits, entity
 
 
 def _dispatch(
@@ -150,7 +159,12 @@ def _dispatch(
     intention: str,
     pos: int | None,
 ):
-    """Return (answer, chapters, entity) for a non-empty span. Raises on unknown."""
+    """Return (answer, chunks, entity) for a non-empty span. Raises on unknown.
+
+    `chunks` is the list[Chunk] used as grounding (empty for paraphrase, which
+    operates on the span itself). Callers that only need chapter indices derive
+    them with `[c.chapter_index for c in chunks]`.
+    """
     if intention == "paraphrase":
         return _paraphrase(llm, span)
     if intention == "define":
@@ -196,5 +210,30 @@ def respond_detailed(
     if not span:
         return {"answer": "Select some text first, then choose what you'd like.",
                 "chapters": [], "entity": None}
-    answer, chapters, entity = _dispatch(llm, index, span, intention, reader_position)
-    return {"answer": answer, "chapters": chapters, "entity": entity}
+    answer, chunks, entity = _dispatch(llm, index, span, intention, reader_position)
+    return {"answer": answer, "chapters": [c.chapter_index for c in chunks], "entity": entity}
+
+
+def respond_with_evidence(
+    llm: LLMClient,
+    index: EmbeddingIndex,
+    selected_text: str,
+    intention: str,
+    reader_position: int | None = config.READER_POSITION,
+) -> dict:
+    """Same dispatch as respond(), but also return the retrieved grounding chunks.
+
+    This is what the validator (LLM 3) needs: the judge must ground its verdict on
+    *exactly the same* position-bounded passages the generator saw (D15), so we
+    surface them here instead of re-retrieving (no drift, no double cost). Returns
+    {answer, chunks, chapters, entity}; `chunks` is a list[Chunk] (empty for
+    paraphrase, which grounds on the selected span itself).
+    """
+    intention = (intention or "").lower().strip()
+    span = (selected_text or "").strip()
+    if not span:
+        return {"answer": "Select some text first, then choose what you'd like.",
+                "chunks": [], "chapters": [], "entity": None}
+    answer, chunks, entity = _dispatch(llm, index, span, intention, reader_position)
+    return {"answer": answer, "chunks": chunks,
+            "chapters": [c.chapter_index for c in chunks], "entity": entity}

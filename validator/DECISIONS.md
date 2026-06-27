@@ -4,10 +4,15 @@ Live record of design decisions for the **LLM 3 validator** proof-of-concept. Cu
 `notebooks/validator_judge_poc_v2.ipynb` (clean rebuild; `validator_judge_poc.ipynb` is the earlier
 scratch version). See §10 of the design doc for why we keep this.
 
-Each decision lists the rationale, the relevant design-doc section, and a status:
-**Implemented** (in the notebook now) or **Planned** (agreed, not yet built).
+The validator is now also **integrated into the running demo** as the `validator/` package —
+`core.py` (the standalone pipeline, no antispoiler import), `service.py` (the bridge that routes by
+feature and grounds on retrieved chunks / the selected span / a dictionary), and `dictionary.py`
+(WordNet grounding). `app.py` calls it per request. Decisions D20–D25 cover that integration.
 
-_Last updated: 2026-06-24_
+Each decision lists the rationale, the relevant design-doc section, and a status:
+**Implemented** (in the notebook/package now) or **Planned** (agreed, not yet built).
+
+_Last updated: 2026-06-25_
 
 ---
 
@@ -317,3 +322,120 @@ This reframes the claim-3 instability as something to *detect and surface*, not 
 the per-request path — so latency is a non-issue; parallelize the K runs. Run 9 also showed that cleaning
 upstream inputs (P2-1) collapses the dispersion, so cross-run stability is primarily a *development/eval
 reliability metric* ("did this change help?"), not a per-request uncertainty gate.
+
+---
+
+## Feature validators — live demo integration (paraphrase & definition)
+These extend the PoC into the running demo. They implement the two grounding sources **D7 deferred**
+("paraphrase and lexical-semantic … structure the router so they're a one-line add") and realize **D15**'s
+feature-dependent grounding — but as **dedicated modules per claim type** (doc §1: "separate validator
+prompts/modules per claim type, not one generic validator"), *not* by extending the 2-way decompose
+router. Both reuse the shared tail unchanged: verdict schema (D9), worst-case aggregation (D10), 3-way UI
+(D11), and the selective-prediction gate (D19). Code: `validator/core.py` (checks), `validator/service.py`
+(routing/grounding), `validator/dictionary.py` (dictionary).
+
+### D20 — Paraphrase: dedicated linguistic-equivalence validator — Implemented
+`validate_paraphrase` is its own prompt/module, grounded on the **selected span itself — no retrieval**
+(D15), testing **bidirectional meaning preservation**: nothing added, dropped, or distorted (doc §3). It
+emits the standard 4-label schema — Supported = faithful, Partially = minor add/omit, Contradicted =
+meaning shifted/negated, Unverifiable = too garbled to compare.
+**Why a separate module (not the context pipeline):** paraphrase is *equivalence*, not factual entailment
+against chapters; folding it into decompose→verdict would mis-frame it (§1). **Why single-call ("minimal"):**
+doc §11 builds the paraphrase validator first as the cleanest check — the per-direction findings
+(added/dropped/distorted) are named in the verdict `reason` rather than as separate rows; decomposed
+bidirectional entailment is the named upgrade. **Spoiler-safe by construction:** the validator sees only
+the source span + the paraphrase.
+
+### D21 — Definition: lexical-semantic validator with two grounding sources — Implemented
+`validate_definition` grounds on **both** a dictionary (is the definition a real meaning of the term?)
+**and** the passage (is it the right sense *here*?), per doc §3 ("valid definition AND the correct sense
+for this passage"). Same 4-label schema; one grounded verdict.
+**Why two sources:** the dictionary covers lexical validity; the passage covers word-sense disambiguation
+(already retrieved by `_define`). The dictionary↔definition pairing mirrors web-search↔world-knowledge
+(§5): convert *recall* into *entailment against retrieved text*.
+
+### D22 — Dictionary grounding: WordNet (offline), pluggable, tiered fallback — Implemented
+Grounding source = **WordNet via NLTK** (`validator/dictionary.py`), behind one `lookup()` so the backend
+is swappable (API / curated). On a **miss** (archaic word, phrase, proper noun, or corpus unavailable) the
+lexical axis short-circuits to **Unverifiable → Hedged** — honest, never a crash.
+**Why WordNet:** offline, deterministic, no API key → a *reproducible / characterizable* result, which is
+what TRL 3 wants. **Why tiered, not model-as-dictionary:** asking the model "is this a good definition?" is
+the §1/§5 recall-not-grounding failure mode — the dictionary is the grounding, the model only does
+entailment against it. **Considered-and-rejected:** model-as-dictionary (kept only as the baseline-to-beat).
+**Validity boundary (named):** WordNet is modern English, single words; archaic/period senses (e.g. "living"
+= a clergy benefice), phrases, and proper nouns are the coverage limit (the §5 "source quality not solved"
+analogue) → those Hedge. A **curated** dictionary is reserved for the offline gold set (the D15 "curated in
+the PoC to isolate the judge" rationale). **Setup/observability:** `python -m nltk.downloader wordnet omw-1.4`;
+the server prints a `Dictionary: OK/UNAVAILABLE` probe at startup so a missing corpus surfaces immediately
+instead of masquerading as "term not found" (the bug that prompted this hardening).
+
+### D23 — Define routing by selection shape (the button is overloaded) — Implemented
+The Define button serves two request types: a **single word / short term** ("acquaintance") wants a
+dictionary definition; a **multi-word phrase/clause** ("when she was discontented, she fancied herself
+nervous") gets a *contextual explanation*. We route by a word-count classifier (`DEFINE_TERM_MAX_WORDS=2`,
+tunable): **≤ 2 words → the lexical-semantic dictionary check (D21/D22); longer → the context-grounded
+faithfulness check** (reuse `validate()` on the selected span + in-bounds passage).
+**Why context (not paraphrase) for phrases:** a phrase-definition legitimately *adds* explanation, which
+the strict paraphrase check would wrongly flag; the context check allows grounded elaboration and honestly
+routes lexical/world glosses it can't ground to Unverifiable → Hedged. **Named limitation:** deep per-word
+lexical verification of words *embedded inside* a phrase (the full §3 four-way decompose-with-dictionary)
+is future work — phrase-definitions are validated for passage-faithfulness, not each embedded word.
+
+### D24 — τ reused across feature slices, not yet per-slice calibrated — Implemented (mock boundary)
+Paraphrase and definition reuse the selective-prediction threshold **τ = 0.85** tuned on the **context**
+gold set (Run 11). **Why flagged:** τ is properly calibrated per the §10 *slice* its data came from; a
+paraphrase or definition τ needs its own gold set — with **seeded wrong-sense definitions** and
+**meaning-shifting paraphrases** (doc §9's named error types) — plus per-slice AUROC / risk–coverage.
+Reusing 0.85 is a reasonable default but is an explicit **mock boundary** extending D18/D19; earning
+per-slice thresholds is offline/notebook work, not blocking the demo.
+**Per-slice calibration now exists offline (`notebooks/validator_judge_poc_v3.ipynb`):** it runs each
+feature slice (contextualize / recall / paraphrase / define) through the **live** validator, reads τ off
+that slice's risk–coverage curve, and emits `CONF_THRESHOLD_BY_FEATURE`. The gold sets are still tiny and
+single-annotator, so the values stay **illustrative**. Selecting τ by feature in `service.py` is **now done
+(D25)** — the live gate uses the per-feature thresholds. The calibrated values and their rationale are **D25**
+(supersedes the single-τ default for analysis purposes).
+
+### D25 — Per-feature selective-prediction thresholds (τ) — Implemented (offline; values illustrative)
+v3 calibrates τ **per feature** (superseding D24's single 0.85 for analysis). Running the live validator on a
+per-slice gold set and reading τ off each slice's risk–coverage curve (target committed-accuracy 0.90, v2 §7
+method) gives — see OBSERVATIONS.md Run 12:
+
+| feature | n | judge acc | AUROC | auto-pick τ | **chosen τ** |
+|---|---|---|---|---|---|
+| contextualize | 24 | 0.92 | 0.91 | 0.80 | **0.80** |
+| recall | 18 | 0.94 | 0.68 | 0.75 | **0.80** (shared) |
+| paraphrase | 21 | 0.76 | 0.78 | 0.99 | **0.85** (override) |
+| define | 28 | 0.79 | 0.83 | 0.90 | **0.85** (override) |
+
+`CONF_THRESHOLD_BY_FEATURE = {"contextualize": 0.80, "recall": 0.80, "paraphrase": 0.85, "define": 0.85}`.
+
+**Why these, and where we override the auto-pick:**
+- **Context-grounded features share τ=0.80.** `contextualize` and `recall` run the *same* `validate_claim`
+  check; both are highly accurate (0.92 / 0.94) and calibrate to ~commit-all. Confidence is a strong signal
+  for contextualize (AUROC 0.91); recall's 0.68 is weak only because the judge barely errs (its one miss —
+  "Bingley has ten thousand" → Contradicted vs gold Unverifiable — is itself debatable). One shared threshold
+  beats two noisy ones.
+- **Paraphrase τ=0.85 (override auto-pick 0.99).** The only τ reaching 0.90 committed-accuracy hedges 67% of
+  paraphrases — unusable for a reading aid. Verbalized confidence is a weak abstention signal here (AUROC 0.78,
+  non-monotonic risk–coverage; some errors are high-confidence), so raising τ mostly hedges *correct*
+  paraphrases. The residual ~20% errors are **safe-side over-strictness** (faithful → Partially/Contradicted),
+  never passing a distorting paraphrase as Valid — so committing at high coverage (0.95) is low-risk; rely on
+  the verdict + reason.
+- **Define τ=0.85 (override auto-pick 0.90).** τ=0.90 hedges 36% of definitions — including *correct*
+  wrong-sense catches at conf 0.85, which are the feature's whole value (Contradicted → Not reliable). τ=0.85
+  keeps those catches at 0.89 coverage / 0.84 committed-accuracy, on a usable signal (AUROC 0.83). The errors
+  concentrate on the *valid-but-imprecise* boundary (judge over-calls Contradicted on imprecise defs, or rounds
+  Partially↔Supported) — a **prompt** fix (use Partially for imprecise-but-valid), not a τ fix.
+
+**Pattern:** τ collapses to two values — **0.80** for the strong context-grounded check, **0.85** for the
+weaker single-verdict checks (paraphrase, define) whose verbalized confidence is less discriminative and whose
+errors are safe-side. The auto-pick (`pick_threshold` at target 0.90) is right for the strong slice but
+over-abstains the weak ones, so we operate **above coverage** there deliberately — selective prediction is a
+weak lever for paraphrase/define; the better quality lever is each check's prompt.
+
+**Mock boundary (extends D18/D19/D24):** tiny single-annotator gold sets → the decimals are illustrative;
+trust the *shape* (which features need a stricter threshold), not the exact numbers. **Wired into the live
+demo:** `CONF_THRESHOLD_BY_FEATURE` lives in `service.py`, which passes each feature's τ down through the
+check functions (`validate` / `validate_paraphrase` / `validate_definition`) to `map_to_ui`; the τ actually
+applied is returned in the UI payload so the reader's tooltip shows the correct per-feature value. (The
+multi-word define route runs the *context* check, so it takes the context τ 0.80, not the dictionary 0.85.)

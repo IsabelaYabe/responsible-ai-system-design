@@ -43,6 +43,12 @@ class LLMClient:
             key = key or os.environ.get("OPENAI_API_KEY")
             self._client = openai.OpenAI(api_key=key)
             self._model = model or config.OPENAI_MODEL
+        elif self.backend == "openrouter":
+            import openai  # OpenRouter exposes an OpenAI-compatible API
+
+            key = key or os.environ.get("OPENROUTER_API_KEY")
+            self._client = openai.OpenAI(api_key=key, base_url=config.OPENROUTER_BASE_URL)
+            self._model = model or config.OPENROUTER_MODEL
         elif self.backend == "ollama":
             import openai  # Ollama exposes an OpenAI-compatible /v1 endpoint
 
@@ -52,7 +58,8 @@ class LLMClient:
             self._model = model or config.OLLAMA_MODEL
         else:
             raise ValueError(
-                f"Unknown backend {self.backend!r}. Choose anthropic | openai | ollama"
+                f"Unknown backend {self.backend!r}. "
+                "Choose anthropic | openai | openrouter | ollama"
             )
 
     @property
@@ -68,7 +75,7 @@ class LLMClient:
                 messages=[{"role": "user", "content": user}],
             )
             return msg.content[0].text.strip()
-        # openai-compatible (openai + ollama)
+        # openai-compatible (openai + openrouter + ollama)
         resp = self._client.chat.completions.create(
             model=self._model,
             max_tokens=max_tokens,
@@ -87,3 +94,10 @@ def make_answerer(api_key: str | None = None) -> LLMClient:
 def make_judge(api_key: str | None = None) -> LLMClient:
     """Stronger model than the answerer, to reduce self-preference bias."""
     return LLMClient(api_key=api_key, model=config.JUDGE_MODEL)
+
+
+def make_validator(api_key: str | None = None) -> LLMClient:
+    """The LLM 3 validator (validator/ package), on its own VALIDATOR_MODEL knob so
+    it can be switched independently of the eval's judge. Stronger than the
+    generator, a different size to reduce self-preference bias (D13)."""
+    return LLMClient(api_key=api_key, model=config.VALIDATOR_MODEL)

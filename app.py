@@ -31,20 +31,34 @@ from pydantic import BaseModel
 from antispoiler import config
 from antispoiler.book import fetch_and_chunk
 from antispoiler.index import build_index
-from antispoiler.llm_client import LLMClient
-from antispoiler.respond import INTENTIONS, respond
+from antispoiler.llm_client import LLMClient, make_validator
+from antispoiler.respond import INTENTIONS, respond_with_evidence
+
+from validator import CONF_THRESHOLD, dictionary
+from validator.service import VALIDATED_FEATURES, validate_response
 
 app = FastAPI(title="Anti-spoiler reading companion (demo)")
 
 _STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
+# Mode banner (prod = Anthropic Haiku+Sonnet; dev = one cheap model via OpenRouter).
+print(f"Mode: {config.APP_MODE.upper()}  |  backend={config.BACKEND}  "
+      f"generator={config.ANSWERER_MODEL}  validator={config.VALIDATOR_MODEL}")
+if config.APP_MODE == "dev":
+    print("  ⚠  dev mode: one cheap model via OpenRouter — for iteration only, NOT the "
+          "characterized setup (validator==generator breaks D13).")
+
 # Built once at import time. Heavy (model download + embedding) but one-off.
 print("Loading book and building index (first run downloads the embedding model)…")
 CHUNKS = fetch_and_chunk()
 INDEX = build_index(CHUNKS)
-LLM = LLMClient(model=config.ANSWERER_MODEL)
+LLM = LLMClient(model=config.ANSWERER_MODEL)          # generator
+VALIDATOR = make_validator()                          # validator LLM 3 (config.VALIDATOR_MODEL); validator != generator (D13)
 MAX_CHAPTER = max(c.chapter_index for c in CHUNKS)
 print(f"Ready: {len(CHUNKS)} chunks across {MAX_CHAPTER} chapters.")
+print(f"Validator: model={VALIDATOR.model}  tau={CONF_THRESHOLD}  features={sorted(VALIDATED_FEATURES)}")
+_dict_ok, _dict_detail = dictionary.available()  # warms the WordNet corpus; surfaces setup issues now
+print(f"Dictionary: {'OK' if _dict_ok else 'UNAVAILABLE'} — {_dict_detail}")
 
 
 class RespondRequest(BaseModel):
@@ -66,6 +80,8 @@ def app_config():
         "max_chapter": MAX_CHAPTER,
         "default_position": config.READER_POSITION,
         "intentions": INTENTIONS,
+        "validated_features": sorted(VALIDATED_FEATURES),
+        "conf_threshold": CONF_THRESHOLD,
     }
 
 
@@ -95,5 +111,20 @@ def do_respond(req: RespondRequest):
     if not req.selected_text.strip():
         return JSONResponse({"error": "no text selected"}, status_code=400)
     pos = max(1, min(int(req.reader_position), MAX_CHAPTER))
-    answer = respond(LLM, INDEX, req.selected_text, req.intention, pos)
-    return {"answer": answer, "intention": req.intention, "reader_position": pos}
+
+    # Generate (LLM 1/1.2), keeping the retrieved grounding chunks for the validator.
+    out = respond_with_evidence(LLM, INDEX, req.selected_text, req.intention, pos)
+    answer = out["answer"]
+
+    # Validate (LLM 3) — blocking; the frontend shows a spinner meanwhile.
+    # selected_text is the grounding source for paraphrase (D15).
+    validation = validate_response(
+        VALIDATOR, req.intention, answer, out["chunks"], req.selected_text
+    )
+
+    return {
+        "answer": answer,
+        "intention": req.intention,
+        "reader_position": pos,
+        "validation": validation,
+    }
