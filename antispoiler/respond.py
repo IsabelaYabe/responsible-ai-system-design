@@ -30,6 +30,9 @@ the eval validates), and the prompts forbid drawing on out-of-bounds knowledge.
 
 from __future__ import annotations
 
+import json
+import re
+
 from . import config
 from .index import EmbeddingIndex
 from .llm_client import LLMClient
@@ -59,30 +62,70 @@ def _preamble() -> str:
     return _PREAMBLE.format(title=config.BOOK_TITLE, author=config.BOOK_AUTHOR)
 
 
+def _parse_define(raw: str) -> tuple[str, list[dict]]:
+    """The define model's JSON output -> (overall meaning, clean [{word, definition}]).
+
+    Tolerant of ```fences``` and stray prose; returns ("", []) on failure so `_define`
+    can always emit valid JSON downstream.
+    """
+    raw = (raw or "").strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```[\w]*\n?", "", raw)
+        raw = re.sub(r"\n?```$", "", raw)
+    obj = None
+    try:
+        obj = json.loads(raw)
+    except Exception:
+        m = re.search(r"\{.*\}", raw, re.DOTALL)
+        if m:
+            try:
+                obj = json.loads(m.group(0))
+            except Exception:
+                obj = None
+    if not isinstance(obj, dict):
+        obj = {}
+    meaning = str(obj.get("meaning", "")).strip()
+    out = []
+    for d in obj.get("definitions", []) or []:
+        if isinstance(d, dict):
+            word, definition = str(d.get("word", "")).strip(), str(d.get("definition", "")).strip()
+            if word and definition:
+                out.append({"word": word, "definition": definition})
+    return meaning, out
+
+
 def _define(llm: LLMClient, index: EmbeddingIndex, span: str, pos: int | None):
     # Find where the term actually appears (lexical substring) so the model sees the
-    # real usage — embedding kNN on a single word often misses the literal occurrence,
-    # which made the model refuse ("I don't see that word in the passages"). Fall back
-    # to embedding similarity when there is no in-bounds literal match.
+    # real usage — embedding kNN on a single word often misses the literal occurrence.
+    # Fall back to embedding similarity when there is no in-bounds literal match.
     ctx = retrieve_lexical(index.chunks, span, pos, max_results=3) or retrieve_embedding(
         index, span, pos, top_k=4
     )
     system = (
         _preamble() + "\n\n"
-        "The reader selected a word or short phrase and wants its meaning AS USED "
-        "in what they are reading. Always give a brief definition in plain language — "
-        "never refuse or ask the reader for the passage. For ordinary vocabulary, "
-        "answer from general knowledge even if the word is not in the passages below. "
-        "If the selection's sense depends on this book specifically, ground it in the "
-        "passages below and nothing later. Two or three sentences at most."
+        "The reader selected some text and wants help understanding it. Produce TWO things:\n"
+        "1. MEANING — a brief plain-language explanation of what the selected text means "
+        "as a whole, in its context (1–2 sentences). Use the passages below for context; "
+        "never reference anything past them.\n"
+        "2. DEFINITIONS — the individual words in the selection a typical reader would most "
+        "likely need defined (medium-to-difficult, archaic, technical, or uncommon; skip "
+        "common, everyday words), each with a SHORT definition of its meaning AS USED here.\n\n"
+        'Return ONLY a JSON object, no prose, no markdown fences:\n'
+        '{"meaning": "<overall meaning of the selection>", '
+        '"definitions": [{"word": "<the word as it appears in the text>", "definition": "<short definition as used here>"}]}\n'
+        'If nothing is hard enough to need defining, use an empty list. Never refuse.'
     )
     user = (
-        f'SELECTED WORD/PHRASE: "{span}"\n\n'
+        f'SELECTED TEXT:\n"""{span}"""\n\n'
         f"SURROUNDING CONTEXT (the reader's passages so far):\n{format_context(ctx)}"
         if ctx
-        else f'SELECTED WORD/PHRASE: "{span}"\n\n(No surrounding passages retrieved.)'
+        else f'SELECTED TEXT:\n"""{span}"""\n\n(No surrounding passages retrieved.)'
     )
-    return llm.complete(system, user), ctx, None
+    # Re-serialize clean JSON so downstream (validator, frontend) can plain-parse it.
+    # Generous budget: the combined meaning + word list is larger, and reasoning models
+    # (cheap ones via OpenRouter in dev) need headroom before emitting the JSON.
+    meaning, definitions = _parse_define(llm.complete(system, user, max_tokens=2000))
+    return json.dumps({"meaning": meaning, "definitions": definitions}), ctx, None
 
 
 def _paraphrase(llm: LLMClient, span: str):

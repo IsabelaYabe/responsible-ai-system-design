@@ -12,6 +12,8 @@ Routing (design doc §3):
     generator saw (D15).
   - paraphrase             : a separate linguistic-equivalence check against the
     selected span itself — no retrieval (D14/D15, §1 "one module per claim type").
+  - define                 : the generator emits {word, definition} pairs; each is
+    checked through the lexical-semantic dictionary check (one per word).
 
 Keeping it here rather than in `app.py` lets the orchestration be reused from a
 notebook or a test without FastAPI, and keeps `app.py` a thin web layer. This is
@@ -21,6 +23,7 @@ standalone.
 
 from __future__ import annotations
 
+import json
 from typing import Callable
 
 from antispoiler.book import Chunk
@@ -31,18 +34,12 @@ from .core import (
     ValidatorLLM,
     to_ui_payload,
     validate,
-    validate_definition,
+    validate_define,
     validate_paraphrase,
 )
 
 # All four reader features now route through LLM 3.
 VALIDATED_FEATURES = {"contextualize", "recall", "paraphrase", "define"}
-
-# Define is overloaded: a single word / short term is a dictionary lookup (lexical-
-# semantic), but a multi-word phrase "definition" is really a contextual explanation.
-# Selections at or under this many words take the dictionary check; longer ones are
-# routed to the context-grounded check. (Tunable.)
-DEFINE_TERM_MAX_WORDS = 2
 
 # Per-feature selective-prediction threshold τ, calibrated offline (D25 / OBSERVATIONS
 # Run 12, notebook v3). Two checks underlie the four features: the context-grounded
@@ -83,16 +80,17 @@ def _span_evidence(selected_text: str) -> list[dict]:
     ]
 
 
-def _dictionary_evidence(term: str, senses_text: str) -> list[dict]:
-    """The dictionary senses as a single evidence entry — the lexical grounding
-    source for a definition (§3/§7)."""
+def _definitions_evidence(items: list[dict]) -> list[dict]:
+    """One dictionary-evidence entry per defined word — the lexical grounding shown in
+    the §7 path / Needs-checking source audit."""
     return [
         {
-            "chunk_id": "dictionary",
-            "chapter_label": f'Dictionary — "{term}"',
+            "chunk_id": f"dict:{it['word']}",
+            "chapter_label": f'Dictionary — "{it["word"]}"',
             "paragraph_index": 0,
-            "text": senses_text or "No dictionary entry found for this term.",
+            "text": it.get("dictionary_text") or "No dictionary entry found for this word.",
         }
+        for it in items
     ]
 
 
@@ -144,29 +142,33 @@ def validate_response(
             _span_evidence(selected_text),
         )
 
-    # Define — routed by selection shape (the button is overloaded):
-    #   short term    -> lexical-semantic dictionary check (valid meaning + passage sense)
-    #   phrase/clause -> context-grounded faithfulness check (a contextual explanation)
+    # Define — the generator returns structured JSON:
+    #   {"meaning": "<overall sense>", "definitions": [{word, definition}, ...]}
+    # Validate BOTH: the overall meaning via the context-grounded check, and each word
+    # via the lexical-semantic dictionary check; all merged and worst-case aggregated.
     if intention == "define":
-        term = selected_text.strip()
-        if not term:
-            return _disabled("no_grounding", "No selected text to define.")
-        if len(term.split()) <= DEFINE_TERM_MAX_WORDS:
-            senses_text = dictionary.lookup_text(term)
-            return _safe_payload(
-                lambda: validate_definition(
-                    validator, term, answer, format_context(chunks), senses_text,
-                    CONF_THRESHOLD_BY_FEATURE["define"],
-                ),
-                _dictionary_evidence(term, senses_text) + _evidence(chunks),
-            )
-        # Multi-word: validate the explanation for passage-faithfulness (additions allowed
-        # if grounded; lexical/world glosses it can't ground surface as Unverifiable -> Hedged).
-        # This runs the context-grounded check, so it takes the CONTEXT τ, not the dictionary one.
-        passage = f'SELECTED PASSAGE (the text being explained):\n"""{term}"""\n\n{format_context(chunks)}'
+        try:
+            obj = json.loads(answer) if answer else {}
+        except ValueError:
+            obj = {}
+        if not isinstance(obj, dict):
+            obj = {}
+        meaning = (obj.get("meaning") or "").strip()
+        pairs = obj.get("definitions") or []
+        if not meaning and not pairs:
+            return _disabled("no_definitions", "Nothing to define in the selection.")
+        items = [
+            {"word": p["word"], "definition": p["definition"],
+             "dictionary_text": dictionary.lookup_text(p["word"])}
+            for p in pairs
+            if isinstance(p, dict) and p.get("word") and p.get("definition")
+        ]
+        # The meaning and each word's sense are grounded on the selected span (its
+        # immediate usage) plus the in-bounds context chunks.
+        passage = f"{selected_text}\n\n{format_context(chunks)}".strip()
         return _safe_payload(
-            lambda: validate(validator, answer, passage, CONF_THRESHOLD_BY_FEATURE["contextualize"]),
-            _span_evidence(term) + _evidence(chunks),
+            lambda: validate_define(validator, meaning, items, passage, CONF_THRESHOLD_BY_FEATURE["define"]),
+            _definitions_evidence(items) + _evidence(chunks),
         )
 
     # Contextualize and Recall (context-grounded features) - Their claims are checked

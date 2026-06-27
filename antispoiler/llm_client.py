@@ -74,7 +74,10 @@ class LLMClient:
                 system=system,
                 messages=[{"role": "user", "content": user}],
             )
-            return msg.content[0].text.strip()
+            # Join all text blocks (robust to empty/non-text content) instead of
+            # assuming content[0].text — avoids AttributeError/IndexError on odd responses.
+            text = "".join(getattr(b, "text", "") for b in (msg.content or []))
+            return self._require_text(text, max_tokens)
         # openai-compatible (openai + openrouter + ollama)
         resp = self._client.chat.completions.create(
             model=self._model,
@@ -84,7 +87,22 @@ class LLMClient:
                 {"role": "user", "content": user},
             ],
         )
-        return resp.choices[0].message.content.strip()
+        choice = resp.choices[0] if resp.choices else None
+        content = choice.message.content if choice and choice.message else None
+        return self._require_text(content, max_tokens)
+
+    def _require_text(self, text: str | None, max_tokens: int) -> str:
+        """Guard against empty/None completions (e.g. a reasoning model that spends the
+        whole token budget on reasoning) — raise a clear error instead of crashing on
+        `.strip()` of None."""
+        text = (text or "").strip()
+        if not text:
+            raise RuntimeError(
+                f"Empty response from {self._model} (max_tokens={max_tokens}). "
+                "If this is a reasoning model via OpenRouter, it may have spent the whole "
+                "budget on reasoning — use a non-reasoning model or raise max_tokens."
+            )
+        return text
 
 
 def make_answerer(api_key: str | None = None) -> LLMClient:
