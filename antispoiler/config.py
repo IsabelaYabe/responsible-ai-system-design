@@ -14,13 +14,42 @@ from __future__ import annotations
 import os
 
 # ── BOOK ─────────────────────────────────────────────────────────────────────
-BOOK_URL = "https://raw.githubusercontent.com/GITenberg/Pride-and-Prejudice_1342/master/1342.txt"
-BOOK_TITLE = "Pride and Prejudice"
-BOOK_AUTHOR = "Jane Austen"
+# Registry of selectable books. Each must use the "Chapter N" heading format that
+# book.CHAPTER_PATTERN expects (verified for both entries below). default_position
+# is the simulated reader position (chapters 1..N "already read"), ~25% through.
+BOOKS = [
+    {
+        "id": "pride-and-prejudice",
+        "title": "Pride and Prejudice",
+        "author": "Jane Austen",
+        "url": "https://raw.githubusercontent.com/GITenberg/Pride-and-Prejudice_1342/master/1342.txt",
+        "default_position": 15,  # 61 chapters
+    },
+    {
+        "id": "frankenstein",
+        "title": "Frankenstein",
+        "author": "Mary Shelley",
+        "url": "https://raw.githubusercontent.com/GITenberg/Frankenstein_84/master/84.txt",
+        "default_position": 6,  # 24 chapters (framing letters precede Chapter 1 and are dropped)
+    },
+]
 
-# Simulated reader position: chapters 1..N are "already read".
-# Pride and Prejudice has 61 chapters; 15 ~= 25% through the book.
-READER_POSITION = 15
+
+def get_book(book_id: str | None = None) -> dict:
+    """Registry entry for book_id; falls back to the first (default) book."""
+    if book_id:
+        for b in BOOKS:
+            if b["id"] == book_id:
+                return b
+    return BOOKS[0]
+
+
+# Legacy module-level constants — the default book. Kept so evaluate.py, qgen.py and
+# the notebook (which import these and call fetch_and_chunk() with no args) keep working.
+BOOK_URL = BOOKS[0]["url"]
+BOOK_TITLE = BOOKS[0]["title"]
+BOOK_AUTHOR = BOOKS[0]["author"]
+READER_POSITION = BOOKS[0]["default_position"]
 
 # ── LLM BACKEND — dev / prod modes ───────────────────────────────────────────
 # Selected by the APP_MODE env var (default "prod"), set on the run command:

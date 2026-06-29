@@ -21,7 +21,14 @@ from .book import Chunk
 
 
 class EmbeddingIndex:
-    def __init__(self, chunks: list[Chunk], embed_model: str, hf_token: str | None = None):
+    def __init__(
+        self,
+        chunks: list[Chunk],
+        embed_model: str,
+        hf_token: str | None = None,
+        title: str | None = None,
+        author: str | None = None,
+    ):
         import faiss
         import numpy as np
         from sentence_transformers import SentenceTransformer
@@ -31,6 +38,11 @@ class EmbeddingIndex:
             os.environ.setdefault("HUGGINGFACE_HUB_TOKEN", hf_token)
 
         self.chunks = chunks
+        # Book identity travels with the index so the response prompts can name the
+        # right book (the index is the per-book corpus). Optional: callers that don't
+        # set it (eval, notebook) fall back to the config default in respond.py.
+        self.title = title
+        self.author = author
         self.embedder = SentenceTransformer(embed_model)
 
         texts = [c.text for c in chunks]
@@ -61,7 +73,9 @@ def build_index(
     chunks: list[Chunk],
     embed_model: str = config.EMBED_MODEL,
     hf_token: str | None = None,
+    title: str | None = None,
+    author: str | None = None,
 ) -> EmbeddingIndex:
     if hf_token is None:
         hf_token = config.get_hf_token()
-    return EmbeddingIndex(chunks, embed_model, hf_token)
+    return EmbeddingIndex(chunks, embed_model, hf_token, title=title, author=author)

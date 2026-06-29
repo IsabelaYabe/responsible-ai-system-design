@@ -58,8 +58,17 @@ _PREAMBLE = (
 )
 
 
-def _preamble() -> str:
-    return _PREAMBLE.format(title=config.BOOK_TITLE, author=config.BOOK_AUTHOR)
+def _book_meta(index: EmbeddingIndex) -> tuple[str, str]:
+    """Book title/author for the prompts — from the index, with config defaults
+    so callers that don't set them (eval, notebook) keep the default book."""
+    title = getattr(index, "title", None) or config.BOOK_TITLE
+    author = getattr(index, "author", None) or config.BOOK_AUTHOR
+    return title, author
+
+
+def _preamble(index: EmbeddingIndex) -> str:
+    title, author = _book_meta(index)
+    return _PREAMBLE.format(title=title, author=author)
 
 
 def _parse_define(raw: str) -> tuple[str, list[dict]]:
@@ -102,7 +111,7 @@ def _define(llm: LLMClient, index: EmbeddingIndex, span: str, pos: int | None):
         index, span, pos, top_k=4
     )
     system = (
-        _preamble() + "\n\n"
+        _preamble(index) + "\n\n"
         "The reader selected some text and wants help understanding it. Produce TWO things:\n"
         "1. MEANING — a brief plain-language explanation of what the selected text means "
         "as a whole, in its context (1–2 sentences). Use the passages below for context; "
@@ -128,9 +137,9 @@ def _define(llm: LLMClient, index: EmbeddingIndex, span: str, pos: int | None):
     return json.dumps({"meaning": meaning, "definitions": definitions}), ctx, None
 
 
-def _paraphrase(llm: LLMClient, span: str):
+def _paraphrase(llm: LLMClient, index: EmbeddingIndex, span: str):
     system = (
-        _preamble() + "\n\n"
+        _preamble(index) + "\n\n"
         "The reader selected a passage and wants it restated in simpler, clearer "
         "English. Paraphrase ONLY the selected passage — keep the same meaning and "
         "tense, do not add information, do not explain what happens next, do not "
@@ -144,7 +153,7 @@ def _paraphrase(llm: LLMClient, span: str):
 def _contextualize(llm: LLMClient, index: EmbeddingIndex, span: str, pos: int | None):
     ctx = retrieve_embedding(index, span, pos, top_k=config.TOP_K)
     system = (
-        _preamble() + "\n\n"
+        _preamble(index) + "\n\n"
         "The reader selected a passage and wants historical, cultural, or thematic "
         "context for it. Lead with general world knowledge (the period, customs, "
         "references). For anything specific to this book's story or characters, use "
@@ -174,11 +183,12 @@ def _recall(llm: LLMClient, index: EmbeddingIndex, span: str, pos: int | None):
             entity = extracted
     hits = recall_retrieve(index.chunks, entity, reader_pos=pos)
     if not hits:
-        upto = "the whole book" if pos is None else f"{config.BOOK_TITLE} chapter {pos}"
+        title, _ = _book_meta(index)
+        upto = "the whole book" if pos is None else f"{title} chapter {pos}"
         msg = f'Nothing about "{entity}" has come up yet in what you\'ve read (up to {upto}).'
         return msg, [], entity
     system = (
-        _preamble() + "\n\n"
+        _preamble(index) + "\n\n"
         'The reader wants to remember what they have already encountered about a '
         'subject earlier in the book ("who was this again?"). Using ONLY the '
         "passages below — every earlier mention within what they have read — "
@@ -209,7 +219,7 @@ def _dispatch(
     them with `[c.chapter_index for c in chunks]`.
     """
     if intention == "paraphrase":
-        return _paraphrase(llm, span)
+        return _paraphrase(llm, index, span)
     if intention == "define":
         return _define(llm, index, span, pos)
     if intention == "contextualize":

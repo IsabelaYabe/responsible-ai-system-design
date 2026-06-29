@@ -27,6 +27,9 @@
   #panel { width:400px; min-width:400px; border-left:1px solid var(--line); background:var(--panel);
            display:flex; flex-direction:column; padding:24px; overflow-y:auto; font-family: system-ui, sans-serif; }
   #panel h2 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 8px; }
+  .bookpick { margin-bottom:20px; }
+  .bookpick select { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px;
+                     background:#fbfaf7; color:var(--ink); font-family:inherit; font-size:14px; cursor:pointer; }
   .pos { margin-bottom:20px; }
   .pos input[type=range] { width:100%; }
   .pos .val { font-weight:600; }
@@ -144,6 +147,11 @@
   </main>
 
   <aside id="panel">
+    <div class="bookpick">
+      <h2>Book</h2>
+      <select id="bookSel"></select>
+    </div>
+
     <div class="pos">
       <h2>Reading position</h2>
       <div>Through chapter <span class="val" id="posVal">–</span> <span class="muted" id="posMax"></span></div>
@@ -171,6 +179,7 @@
 const $ = (id) => document.getElementById(id);
 let selectedText = "";
 let spinnerTimer = null;
+let currentBook = null;
 
 // Verdict label -> css modifier for the per-claim chips.
 const VCHIP = {
@@ -211,8 +220,23 @@ function renderDefinitions(el, answerJson) {
   el.innerHTML = html || '<p class="muted">Nothing to define here.</p>';
 }
 
+async function loadBooks() {
+  const books = await (await fetch("/books")).json();
+  const sel = $("bookSel");
+  sel.innerHTML = "";
+  for (const b of books) {
+    const o = document.createElement("option");
+    o.value = b.id;
+    o.textContent = b.title + " — " + b.author;
+    sel.appendChild(o);
+  }
+  currentBook = books.length ? books[0].id : null;
+  sel.value = currentBook;
+}
+
 async function loadConfig() {
-  const c = await (await fetch("/config")).json();
+  const c = await (await fetch("/config?book=" + encodeURIComponent(currentBook))).json();
+  currentBook = c.book_id;
   $("title").textContent = c.title;
   $("byline").textContent = "by " + c.author;
   const pos = $("pos");
@@ -225,7 +249,8 @@ async function loadConfig() {
 async function loadBook() {
   const upto = $("pos").value;
   $("posVal").textContent = upto;
-  const data = await (await fetch("/book?upto=" + upto)).json();
+  const data = await (await fetch(
+    "/book?book=" + encodeURIComponent(currentBook) + "&upto=" + upto)).json();
   const book = $("book");
   book.innerHTML = "";
   for (const ch of data.chapters) {
@@ -344,6 +369,7 @@ async function ask(intention) {
         selected_text: selectedText,
         intention,
         reader_position: parseInt($("pos").value, 10),
+        book_id: currentBook,
       }),
     });
     const data = await res.json();
@@ -380,7 +406,18 @@ document.querySelectorAll(".acts button").forEach((b) =>
   b.addEventListener("click", () => ask(b.dataset.intent))
 );
 
-(async () => { await loadConfig(); await loadBook(); })();
+// Switching books: the server may need to build+index the new book on first use
+// (lazy + cached), so show a loading note while loadConfig/loadBook run.
+$("bookSel").addEventListener("change", async () => {
+  currentBook = $("bookSel").value;
+  setSelection("");
+  $("answer").innerHTML = '<span class="muted">The assistant\'s reply will appear here.</span>';
+  $("book").innerHTML = '<p class="muted">Loading book…</p>';
+  await loadConfig();
+  await loadBook();
+});
+
+(async () => { await loadBooks(); await loadConfig(); await loadBook(); })();
 </script>
 </body>
 </html>
