@@ -11,10 +11,14 @@ report.md            Written report (problem, proposal, architecture, validation
 antispoiler/         Position-bounded anti-spoiler mechanism + eval harness (see its README)
 validator/           validation layer: core pipeline + service bridge + dictionary
                        (design record in validator/DECISIONS.md, results in OBSERVATIONS.md)
+explanation/         Local difficult-word Edit Predictor + contextual explanation pipeline
+                       (see its README)
 app.py               Interactive demo (FastAPI): reading UI + validation
 static/index.html    Demo frontend — select text, pick a feature, see the 3-way validation
+tests/               Integration tests spanning app.py + antispoiler + explanation
 notebooks/           antispoiler_eval.ipynb, validator_judge_poc_v2.ipynb (LLM-3 PoC),
-                       validator_judge_poc_v3.ipynb (per-feature τ calibration)
+                       validator_judge_poc_v3.ipynb (per-feature τ calibration),
+                       explanation/train_edit_predictor.ipynb + test_selection_explainer.ipynb
 docs/                Persona + user journey, and reference papers
 links.md             Shared links (slides, etc.)
 ```
@@ -33,12 +37,42 @@ conda run -n antispoiler-arm python tests/test_logic.py   # no API key needed
 Put `API_KEY` and `HF_TOKEN` in a `.env` at the repo root (git-ignored). Full
 details in `antispoiler/README.md`.
 
+## Running the explanation pipeline
+
+The maintained explanation module trains and uses a supervised token classifier
+for difficult-word spans, then asks OpenRouter for contextual explanations.
+Current checked-in runs are:
+
+```text
+explanation/model/checkpoints/edit_predictor_complex_words_distilbert_max256_v1
+explanation/model/checkpoints/edit_predictor_complex_words_distilbert_max256_final
+explanation/model/checkpoints/edit_predictor_complex_words_distilbert_max256_big_final
+```
+
+All three were trained on different builds of the token dataset (see each
+checkpoint's own `training_config.json`/`metrics.json` for the exact dataset
+size and hyperparameters); `big_final` was trained on the largest dataset
+build, scores highest on validation/test `f1_M` (0.92 vs 0.84 for `final`),
+and is the one actually used in the pipeline/demo. See `explanation/README.md`
+for details.
+
+```bash
+python3 -m explanation.scripts.run_inference \
+  --sentence "A committee of the institute appoints the laureates for the Nobel Prize." \
+  --edit-predictor-checkpoint explanation/model/checkpoints/edit_predictor_complex_words_distilbert_max256_big_final \
+  --max-length 256
+```
+
 ## Running the interactive demo
 
 The demo (`app.py` + `static/index.html`) is the reading assistant UI: select a
 passage, click a feature (Define / Paraphrase / Contextualize / Recall), and the
 generated answer is run through the LLM-3 validator and shown as Valid / Hedged /
-Not reliable. Needs `ANTHROPIC_API_KEY` in the repo-root `.env`.
+Not reliable. Needs `ANTHROPIC_API_KEY` in the repo-root `.env`. Define is the
+exception: it runs on the local Edit Predictor (`explanation/`, no Anthropic
+call for identification) and only calls out to OpenRouter to gloss a flagged
+word, so it also needs `OPENROUTER_API_KEY` — see "Running the explanation
+pipeline" above.
 
 ```bash
 conda run -n antispoiler-arm uvicorn app:app --port 8000

@@ -32,7 +32,7 @@ from antispoiler import config
 from antispoiler.book import fetch_and_chunk
 from antispoiler.index import build_index
 from antispoiler.llm_client import LLMClient, make_validator
-from antispoiler.respond import INTENTIONS, respond_with_evidence
+from antispoiler.respond import INTENTIONS, _define_via_explanation, respond_with_evidence
 
 from validator import CONF_THRESHOLD, dictionary
 from validator.service import VALIDATED_FEATURES, validate_response
@@ -56,6 +56,28 @@ VALIDATOR = make_validator()                          # validator LLM 3 (config.
 # (and the first build downloads the embedding model), so we only build the default
 # book at startup; other books are built on first switch. Keyed by book id.
 BOOK_STATE: dict[str, dict] = {}
+
+# Define runs through the locally-trained Edit Predictor (explanation/) instead of
+# the generator LLM. Built lazily on first use, like BOOK_STATE above: the import
+# alone pulls in torch/transformers, and loading the checkpoint takes a moment, so
+# nobody pays that cost unless Define is actually clicked.
+_SELECTION_EXPLAINER = None
+
+
+def get_selection_explainer():
+    """Lazily build + cache the Edit Predictor-backed explainer used by Define."""
+    global _SELECTION_EXPLAINER
+    if _SELECTION_EXPLAINER is None:
+        from explanation.inference.selection_explainer import SelectionExplainer
+
+        checkpoint = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "explanation/model/checkpoints/edit_predictor_complex_words_distilbert_max256_big_final",
+        )
+        print(f"Loading Edit Predictor checkpoint for Define: {os.path.basename(checkpoint)}…")
+        _SELECTION_EXPLAINER = SelectionExplainer(edit_predictor_checkpoint=checkpoint, max_length=256)
+        print("Edit Predictor ready.")
+    return _SELECTION_EXPLAINER
 
 
 def get_book_state(book_id: str | None = None) -> dict:
@@ -152,8 +174,21 @@ def do_respond(req: RespondRequest):
     # Generate (LLM 1/1.2), keeping the retrieved grounding chunks for the validator.
     # A generation failure must not 500 the request — degrade to an honest message
     # (e.g. a cheap dev model returning an empty response).
+    # Define is the one exception: it runs through the locally-trained Edit
+    # Predictor (explanation/) rather than the generator LLM (see _define_via_explanation).
     try:
-        out = respond_with_evidence(LLM, index, req.selected_text, req.intention, pos)
+        if req.intention == "define":
+            answer, chunks, entity = _define_via_explanation(
+                get_selection_explainer(), index, req.selected_text, pos
+            )
+            out = {
+                "answer": answer,
+                "chunks": chunks,
+                "chapters": [c.chapter_index for c in chunks],
+                "entity": entity,
+            }
+        else:
+            out = respond_with_evidence(LLM, index, req.selected_text, req.intention, pos)
     except Exception as e:
         print(f"[generator] failed: {type(e).__name__}: {e}")
         return {

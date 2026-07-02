@@ -11,6 +11,10 @@ pandas>=2.0
 scikit-learn>=1.3        # Cohen's kappa for judge validation
 python-dotenv>=1.0       # local .env credential fallback
 nltk>=3.8                # WordNet dictionary grounding for the definition validator
+torch>=2.0               # Edit Predictor training, inference, and dataset artifacts
+transformers>=4.40       # Hugging Face tokenizers/models for explanation module
+spacy>=3.7               # lemma matching for CEFR pseudo-label generation (needs `python -m spacy download en_core_web_sm`)
+matplotlib>=3.8          # training-curve plots in notebooks/explanation/train_edit_predictor.ipynb
 
 # Interactive demo (app.py) — not needed for the eval/notebook.
 fastapi>=0.110

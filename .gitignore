@@ -219,3 +219,10 @@ __marimo__/
 
 .DS_Store
 Claude.md
+
+# Model checkpoints / generated ML artifacts
+explanation/model/checkpoints/
+*.safetensors
+*.bin
+*.pt
+EOF

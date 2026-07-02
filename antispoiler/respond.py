@@ -32,17 +32,22 @@ from __future__ import annotations
 
 import json
 import re
+from typing import TYPE_CHECKING
 
 from . import config
 from .index import EmbeddingIndex
 from .llm_client import LLMClient
 from .retrieval import (
+    _in_bounds,
     extract_entity,
     format_context,
     recall_retrieve,
     retrieve_embedding,
     retrieve_lexical,
 )
+
+if TYPE_CHECKING:
+    from explanation.inference.selection_explainer import SelectionExplainer
 
 INTENTIONS = ("define", "paraphrase", "contextualize", "recall")
 
@@ -135,6 +140,81 @@ def _define(llm: LLMClient, index: EmbeddingIndex, span: str, pos: int | None):
     # (cheap ones via OpenRouter in dev) need headroom before emitting the JSON.
     meaning, definitions = _parse_define(llm.complete(system, user, max_tokens=2000))
     return json.dumps({"meaning": meaning, "definitions": definitions}), ctx, None
+
+
+_PARAGRAPH_BREAK = re.compile(r"\r?\n\s*\r?\n")
+
+
+def _normalize_book_text(text: str) -> str:
+    """Collapse mid-paragraph hard line wraps to spaces, keep blank-line paragraph breaks.
+
+    Gutenberg-style chunk text hard-wraps lines inside a paragraph (`\\r\\n`),
+    which `explanation.SelectionExplainer` never saw during training (it expects
+    single-line sentences and paragraphs separated by real newlines). Splitting on
+    blank lines first, then collapsing whitespace only *within* each part, keeps
+    paragraph boundaries intact instead of merging the whole chunk into one line.
+    """
+    parts = _PARAGRAPH_BREAK.split(text)
+    return "\n\n".join(re.sub(r"\s+", " ", part).strip() for part in parts if part.strip())
+
+
+def _define_via_explanation(
+    selection_explainer: "SelectionExplainer",
+    index: EmbeddingIndex,
+    span: str,
+    pos: int | None,
+):
+    """Define using the locally-trained Edit Predictor + LLM gloss (`explanation/`).
+
+    A separate path from `_define` (used only by the live app's /respond route,
+    never by evaluate.py / the eval harness, which keep validating the original
+    LLM-only `_define`): identification is local and deterministic here; the LLM
+    is only asked to gloss the words the Edit Predictor already flagged, grounded
+    on the paragraph(s) that contain the selection (`SelectionExplainer.explain`).
+
+    Same in-bounds guarantee as every other intention: chunks are filtered by
+    `_in_bounds(chunk, pos)` before anything is searched, so the reader can never
+    get an explanation grounded on text past their position.
+
+    Returns the same `(answer_json_str, chunks, entity)` shape as `_define`, so
+    the rest of the pipeline (validator, frontend) needs no changes: `answer` is
+    `{"meaning": "", "definitions": [{"word", "definition"}]}` — `meaning` is
+    always empty because the Edit Predictor pipeline only glosses individual
+    words, never summarizes the selection as a whole.
+
+    If `span` can't be found verbatim in any in-bounds chunk (e.g. the browser's
+    selection normalization differs from the stored text), the selection is
+    explained on its own — passed to `SelectionExplainer` as both the text and
+    the selection, so there is no surrounding paragraph as context, just the
+    selection itself.
+    """
+    normalized_span = re.sub(r"\s+", " ", span).strip()
+
+    for chunk in index.chunks:
+        if not _in_bounds(chunk, pos):
+            continue
+        text = _normalize_book_text(chunk.text)
+        if normalized_span not in text:
+            continue
+        try:
+            result = selection_explainer.explain(text, normalized_span)
+        except ValueError:
+            continue
+        definitions = [
+            {"word": dw.word, "definition": dw.meaning_in_context}
+            for dw in result.difficult_words
+        ]
+        return json.dumps({"meaning": "", "definitions": definitions}), [chunk], None
+
+    try:
+        result = selection_explainer.explain(normalized_span, normalized_span)
+        definitions = [
+            {"word": dw.word, "definition": dw.meaning_in_context}
+            for dw in result.difficult_words
+        ]
+    except ValueError:
+        definitions = []
+    return json.dumps({"meaning": "", "definitions": definitions}), [], None
 
 
 def _paraphrase(llm: LLMClient, index: EmbeddingIndex, span: str):
