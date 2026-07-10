@@ -226,3 +226,5 @@ explanation/model/checkpoints/
 *.bin
 *.pt
 EOF
+
+*.Zone.Identifier
